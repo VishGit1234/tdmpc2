@@ -32,8 +32,8 @@ RUN apt-get -y update && \
     mkdir /root/.ssh
 
 # conda environment
-COPY nvidia_icd.json /usr/share/vulkan/icd.d/nvidia_icd.json
-COPY environment.yaml /root
+COPY docker/nvidia_icd.json /usr/share/vulkan/icd.d/nvidia_icd.json
+COPY docker/environment.yaml /root
 RUN conda update conda && \
     conda env update -n base -f /root/environment.yaml && \
     rm /root/environment.yaml && \
@@ -44,6 +44,10 @@ SHELL ["/bin/bash", "-c"]
 RUN echo "cd /root" >> /root/.bashrc
 # image does not include metaworld, maniskill, myosuite
 # these can be installed separately; see environment.yaml for details
+
+WORKDIR /root/tdmpc2/tdmpc2
+
+COPY ./tdmpc2 .
 
 # success!
 RUN echo "Successfully built TD-MPC2 Docker image!"

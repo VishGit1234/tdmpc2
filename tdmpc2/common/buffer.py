@@ -95,19 +95,25 @@ class Buffer():
 		Prepare a sampled batch for training (post-processing).
 		Expects `td` to be a TensorDict with batch size TxB.
 		"""
-		td = td.select("obs", "action", "reward", "terminated", "task", strict=False).to(self._device, non_blocking=True)
+		td = td.select("obs", "action", "reward", "task", strict=False).to(self._device, non_blocking=True)
 		obs = td.get('obs').contiguous()
 		action = td.get('action')[1:].contiguous()
 		reward = td.get('reward')[1:].unsqueeze(-1).contiguous()
-		terminated = td.get('terminated', None)
-		if terminated is not None:
-			terminated = td.get('terminated')[1:].unsqueeze(-1).contiguous()
-		else:
-			terminated = torch.zeros_like(reward)
 		task = td.get('task', None)
 		if task is not None:
 			task = task[0].contiguous()
-		return obs, action, reward, terminated, task
+		return obs, action, reward, task
+
+	def add(self, td):
+		"""Add an episode to the buffer."""
+		td['episode'] = torch.ones_like(td['reward'], dtype=torch.int64) * torch.arange(self._num_eps, self._num_eps+self.cfg.num_envs)
+		td = td.permute(1, 0)
+		if self._num_eps == 0:
+			self._buffer = self._init(td[0])
+		for i in range(self.cfg.num_envs):
+			self._buffer.extend(td[i])
+		self._num_eps += self.cfg.num_envs
+		return self._num_eps
 
 	def sample(self):
 		"""Sample a batch of subsequences from the buffer."""

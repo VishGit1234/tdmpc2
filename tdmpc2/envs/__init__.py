@@ -30,6 +30,8 @@ try:
 except:
 	make_mujoco_env = missing_dependencies
 
+from envs.kinova_env import KinovaEnv
+import genesis as gs
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
@@ -57,27 +59,49 @@ def make_multitask_env(cfg):
 
 def make_env(cfg):
 	"""
-	Make an environment for TD-MPC2 experiments.
+	Make kinova environment for TD-MPC2 experiments.
 	"""
+	gs.init(
+		backend=gs.gpu,
+		logging_level="warning"
+	)
 	gym.logger.set_level(40)
-	if cfg.multitask:
-		env = make_multitask_env(cfg)
+	env = KinovaEnv(
+		num_envs=cfg.num_envs,
+		env_cfg=cfg,
+		show_viewer=False
+	)
+	env = TensorWrapper(env)
 
-	else:
-		env = None
-		for fn in [make_dm_control_env, make_maniskill_env, make_metaworld_env, make_myosuite_env, make_mujoco_env]:
-			try:
-				env = fn(cfg)
-			except ValueError:
-				pass
-		if env is None:
-			raise ValueError(f'Failed to make environment "{cfg.task}": please verify that dependencies are installed and that the task exists.')
-		env = TensorWrapper(env)
-	try: # Dict
-		cfg.obs_shape = {k: v.shape for k, v in env.observation_space.spaces.items()}
-	except: # Box
-		cfg.obs_shape = {cfg.get('obs', 'state'): env.observation_space.shape}
-	cfg.action_dim = env.action_space.shape[0]
-	cfg.episode_length = env.max_episode_steps
-	cfg.seed_steps = max(1000, 5*cfg.episode_length)
+	cfg.obs_shape = {cfg.get('obs', 'state'): (env.num_obs,)}
+	cfg.action_dim = env.num_actions
+	cfg.episode_length = env.max_episode_length
+	cfg.seed_steps = max(1000, 5*cfg.episode_length) * cfg.num_envs
 	return env
+
+# def make_env(cfg):
+# 	"""
+# 	Make an environment for TD-MPC2 experiments.
+# 	"""
+# 	gym.logger.set_level(40)
+# 	if cfg.multitask:
+# 		env = make_multitask_env(cfg)
+
+# 	else:
+# 		env = None
+# 		for fn in [make_dm_control_env, make_maniskill_env, make_metaworld_env, make_myosuite_env, make_mujoco_env]:
+# 			try:
+# 				env = fn(cfg)
+# 			except ValueError:
+# 				pass
+# 		if env is None:
+# 			raise ValueError(f'Failed to make environment "{cfg.task}": please verify that dependencies are installed and that the task exists.')
+# 		env = TensorWrapper(env)
+# 	try: # Dict
+# 		cfg.obs_shape = {k: v.shape for k, v in env.observation_space.spaces.items()}
+# 	except: # Box
+# 		cfg.obs_shape = {cfg.get('obs', 'state'): env.observation_space.shape}
+# 	cfg.action_dim = env.action_space.shape[0]
+# 	cfg.episode_length = env.max_episode_steps
+# 	cfg.seed_steps = max(1000, 5*cfg.episode_length)
+# 	return env

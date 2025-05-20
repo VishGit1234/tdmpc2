@@ -8,7 +8,7 @@ dependencies:
   - glew=2.2.0
   - glib=2.78.4
   - pip=24.0
-  - python=3.9
+  - python=3.10
   - pytorch=2.6.0.dev20241112
   - pytorch-cuda=12.4
   - torchvision=0.15.2
@@ -24,9 +24,9 @@ dependencies:
     - hydra-submitit-launcher==1.2.0
     - submitit==1.5.1
     - omegaconf==2.3.0
-    - moviepy==1.0.3
-    - mujoco==3.1.2
-    - numpy==1.24.4
+    - moviepy==2.0.0
+    - mujoco==3.2.5
+    - numpy==1.26.4
     - tensordict-nightly==2025.1.1
     - torchrl-nightly==2025.1.1
     - kornia==0.7.2
@@ -34,6 +34,8 @@ dependencies:
     - tqdm==4.66.4
     - pandas==2.0.3
     - wandb==0.17.4
+    - libigl==2.5.1
+    - genesis-world==0.2.1
     ####################
     # Gym:
     # (unmaintained but required for maniskill2/meta-world)

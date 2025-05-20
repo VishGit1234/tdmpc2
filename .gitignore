@@ -1,4 +1,9 @@
+# Secrets
+wandb_api_key.txt
+*.env
+
 # Logging
+logs/
 tdmpc2/logs/
 tdmpc2/outputs/
 tdmpc2/wandb/
