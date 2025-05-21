@@ -22,11 +22,11 @@ action_scale: 0.01
 
 # evaluation
 checkpoint: ???
-eval_episodes: 2048 # must be greater than of num_envs
-eval_freq: 1_000_000
+eval_episodes: 2048 # must be multiple of num_envs
+eval_freq: 1_048_576 # must be a multiple of num_envs
 
 # training
-steps: 100_000_000
+steps: 99_999_744 # should be multiple of num_envs
 batch_size: 256
 steps_per_update: 1024 # should be a divisor of num_envs
 reward_coef: 0.1
@@ -88,7 +88,7 @@ save_csv: false
 # misc
 compile: false
 save_video: false
-save_agent: false
+save_agent: true
 seed: 1
 
 # convenience
