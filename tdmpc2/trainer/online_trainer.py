@@ -51,10 +51,9 @@ class OnlineTrainer(Trainer):
 				self.logger.video.save(self._step)
 		return dict(
 			episode_reward=torch.cat(ep_rewards).mean().cpu(),
-			episode_success=info['success'].mean().cpu(),
+			episode_success=torch.cat(ep_successes['success']).mean().cpu(),
 			episode_length=np.nanmean(ep_lengths),
 		)
-
 	def to_td(self, obs, action=None, reward=None, terminated=None):
 		"""Creates a TensorDict for a new episode."""
 		if isinstance(obs, dict):
