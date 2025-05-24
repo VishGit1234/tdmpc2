@@ -72,7 +72,7 @@ model_size: 1 # preset config, below ignored
 num_enc_layers: 2
 enc_dim: 256
 num_channels: 32
-mlp_dim: 384
+mlp_dim: 256
 latent_dim: 128
 task_dim: 96
 num_q: 2

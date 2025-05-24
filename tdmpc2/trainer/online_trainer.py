@@ -54,7 +54,6 @@ class OnlineTrainer(Trainer):
 			episode_success=100*torch.cat(ep_successes).mean().cpu(),
 			episode_length=np.nanmean(ep_lengths),
 		)
-
 	def to_td(self, obs, action=None, reward=None, terminated=None):
 		"""Creates a TensorDict for a new episode."""
 		if isinstance(obs, dict):
