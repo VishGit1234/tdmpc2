@@ -76,5 +76,9 @@ def parse_cfg(cfg: OmegaConf) -> OmegaConf:
 	else:
 		cfg.task_dim = 0
 	cfg.tasks = TASK_SET.get(cfg.task, [cfg.task])
+	
+  # cuda device
+	if cfg.get('cuda_device', None) is not None:
+		cfg.cuda_device = "cuda:" + str(cfg.cuda_device)
 
 	return cfg_to_dataclass(cfg)

@@ -65,13 +65,11 @@ def make_env(cfg):
 		backend=gs.gpu,
 		logging_level="warning"
 	)
-	gym.logger.set_level(40)
 	env = KinovaEnv(
 		num_envs=cfg.num_envs,
 		env_cfg=cfg,
 		show_viewer=False
 	)
-	env = TensorWrapper(env)
 
 	cfg.obs_shape = {cfg.get('obs', 'state'): (env.num_obs,)}
 	cfg.action_dim = env.num_actions

@@ -45,6 +45,8 @@ RUN echo "cd /root" >> /root/.bashrc
 # image does not include metaworld, maniskill, myosuite
 # these can be installed separately; see environment.yaml for details
 
+RUN sed -i 's/moviepy\.editor/moviepy/g' /opt/conda/lib/python3.10/site-packages/wandb/sdk/data_types/video.py
+
 WORKDIR /root/tdmpc2/tdmpc2
 
 COPY ./tdmpc2 .

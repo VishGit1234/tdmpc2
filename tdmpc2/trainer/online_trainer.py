@@ -37,7 +37,7 @@ class OnlineTrainer(Trainer):
 				self.logger.video.init(self.env, enabled=(i==0))
 			while not done.any():
 				torch.compiler.cudagraph_mark_step_begin()
-				action = self.agent.act(obs, t0=t==0, eval_mode=True)
+				action = self.agent.act(obs.to(self.cfg.cuda_device), t0=t==0, eval_mode=True)
 				obs, reward, done, info = self.env.step(action)
 				ep_reward += reward
 				t += 1
@@ -51,7 +51,7 @@ class OnlineTrainer(Trainer):
 				self.logger.video.save(self._step)
 		return dict(
 			episode_reward=torch.cat(ep_rewards).mean().cpu(),
-			episode_success=info['success'].mean().cpu(),
+			episode_success=100*torch.cat(ep_successes).mean().cpu(),
 			episode_length=np.nanmean(ep_lengths),
 		)
 
@@ -80,7 +80,7 @@ class OnlineTrainer(Trainer):
 		train_metrics, done, eval_next = {}, torch.tensor(True), False
 		while self._step <= self.cfg.steps:
 			# Evaluate agent periodically
-			if self._step % self.cfg.eval_freq == 0:
+			if self._step % self.cfg.eval_freq == 0 and self._step > 0:
 				eval_next = True
 
 			# Reset environment
@@ -110,7 +110,7 @@ class OnlineTrainer(Trainer):
 
 			# Collect experience
 			if self._step > self.cfg.seed_steps:
-				action = self.agent.act(obs, t0=len(self._tds)==1)
+				action = self.agent.act(obs.to(self.cfg.cuda_device), t0=len(self._tds)==1)
 			else:
 				action = self.env.rand_act()
 			obs, reward, done, info = self.env.step(action)

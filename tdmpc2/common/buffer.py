@@ -12,7 +12,7 @@ class Buffer():
 
 	def __init__(self, cfg):
 		self.cfg = cfg
-		self._device = torch.device('cuda:0')
+		self._device = torch.device(cfg.cuda_device)
 		self._capacity = min(cfg.buffer_size, cfg.steps)
 		self._sampler = SliceSampler(
 			num_slices=self.cfg.batch_size,
@@ -59,7 +59,7 @@ class Buffer():
 		total_bytes = bytes_per_step*self._capacity
 		print(f'Storage required: {total_bytes/1e9:.2f} GB')
 		# Heuristic: decide whether to use CUDA or CPU memory
-		storage_device = 'cuda:0' if 2.5*total_bytes < mem_free else 'cpu'
+		storage_device = self.cfg.cuda_device if 2.5*total_bytes < mem_free else 'cpu'
 		print(f'Using {storage_device.upper()} memory for storage.')
 		self._storage_device = torch.device(storage_device)
 		return self._reserve_buffer(
@@ -106,7 +106,7 @@ class Buffer():
 
 	def add(self, td):
 		"""Add an episode to the buffer."""
-		td['episode'] = torch.ones_like(td['reward'], dtype=torch.int64) * torch.arange(self._num_eps, self._num_eps+self.cfg.num_envs)
+		td['episode'] = torch.ones_like(td['reward'], dtype=torch.int64, device=self.cfg.cuda_device) * torch.arange(self._num_eps, self._num_eps+self.cfg.num_envs, device=self.cfg.cuda_device)
 		td = td.permute(1, 0)
 		if self._num_eps == 0:
 			self._buffer = self._init(td[0])

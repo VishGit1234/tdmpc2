@@ -50,13 +50,6 @@ class KinovaEnv:
             ),
             show_viewer=show_viewer,
           )
-        #   self.cam = self.scene.add_camera(
-        #         res=(640, 480),
-        #         pos=(3.5, 0.5, 2.5),
-        #         lookat=(0, 0, 0.5),
-        #         up=(0, 0, 1),
-        #         fov=40
-        #   )
         else:
           self.scene = gs.Scene(
             sim_options=gs.options.SimOptions(dt=self.dt, substeps=2),
@@ -65,6 +58,14 @@ class KinovaEnv:
             ),
             show_viewer=show_viewer,
           )
+
+        self.cam = self.scene.add_camera(
+              res=(640, 480),
+              pos=(3.5, 0.5, 2.5),
+              lookat=(0, 0, 0.5),
+              up=(0, 0, 1),
+              fov=40
+        )
 
         # add plane
         self.scene.add_entity(
@@ -168,18 +169,18 @@ class KinovaEnv:
             self.rew_buf += rew_terms[key]
             self.episode_sums[key] += rew_terms[key]
 
-        # check termination and reset
-        # terminate if box is at goal
-        self.reset_buf = torch.norm(self.goal[:2] - self.box.get_pos()[:, :2], dim=1) < self.env_cfg.termination_if_cube_goal_dist_less_than
-        self.info["success"][:] = self.reset_buf.int()
-        # terminate if episode length is reached
-        self.reset_buf |= self.episode_length_buf > self.max_episode_length
-        # terminate if robot is out of bounds
-        self.reset_buf |= (torch.abs(new_pos[:, 0]) > 0.5)
-        self.reset_buf |= (torch.abs(new_pos[:, 1]) > 0.5)
-        # terminate if action is out of bounds
-        self.reset_buf |= (torch.abs(clipped_actions[:, 0]) > self.env_cfg.clip_actions)
-        self.reset_buf |= (torch.abs(clipped_actions[:, 1]) > self.env_cfg.clip_actions)
+        # # check termination and reset
+        # # terminate if box is at goal
+        # self.reset_buf = torch.norm(self.goal[:2] - self.box.get_pos()[:, :2], dim=1) < self.env_cfg.termination_if_cube_goal_dist_less_than
+        # self.info["success"][:] = self.reset_buf.int()
+        # # terminate if episode length is reached
+        # self.reset_buf |= self.episode_length_buf > self.max_episode_length
+        # # terminate if robot is out of bounds
+        # self.reset_buf |= (torch.abs(new_pos[:, 0]) > 0.5)
+        # self.reset_buf |= (torch.abs(new_pos[:, 1]) > 0.5)
+        # # terminate if action is out of bounds
+        # self.reset_buf |= (torch.abs(clipped_actions[:, 0]) > self.env_cfg.clip_actions)
+        # self.reset_buf |= (torch.abs(clipped_actions[:, 1]) > self.env_cfg.clip_actions)
 
         # for tdmpc2 all envs must terminate at same time 
         self.reset_buf = self.episode_length_buf > self.max_episode_length
@@ -193,6 +194,9 @@ class KinovaEnv:
 
         # compute observations
         self.obs_buf = self._get_observation()
+
+        # set info termination (only for tdmpc2)
+        self.info['terminated'] = torch.tensor(0.0, device=gs.device, dtype=gs.tc_float)
 
         return self.obs_buf, self.rew_buf, self.reset_buf, self.info
     
@@ -228,7 +232,10 @@ class KinovaEnv:
         cube_back_pos = self.box.get_pos()[:, :2] + (self.env_cfg.box_size[1] / 2)*torch.stack([2*w*z, 2*z**2 - 1], dim=1)
         cube_arm_dist = torch.norm(self.bracelet_link.get_pos()[:, :2] - cube_back_pos, dim=1)
 
-        success = (cube_goal_dist < self.env_cfg.termination_if_cube_goal_dist_less_than).int()       
+        # success = (cube_goal_dist < self.env_cfg.termination_if_cube_goal_dist_less_than).int()      
+        success = (torch.abs(self.goal[1] - self.box.get_pos()[:, 1]) < self.env_cfg.termination_if_cube_goal_dist_less_than)
+        success &= (torch.abs(self.goal[0] - self.box.get_pos()[:, 0]) < self.env_cfg.termination_if_cube_goal_dist_less_than*10)
+        self.info["success"][:] = success.int()
 
         # reward terms
         INIT_CUBE_ARM_DIST = 0.2
@@ -243,7 +250,7 @@ class KinovaEnv:
                 INIT_CUBE_ARM_DIST*self.env_cfg.cube_arm_dist_rew_scale - self.env_cfg.cube_arm_dist_rew_scale*cube_arm_dist,
                 (INIT_CUBE_ARM_DIST*self.env_cfg.cube_arm_dist_rew_scale - self.env_cfg.cube_arm_dist_rew_scale*cube_arm_dist)/10
             ),
-            "success_rew" : self.env_cfg.success_reward*success,
+            "success_rew" : self.env_cfg.success_reward*success.int(),
         }
 
         return rew_terms
@@ -290,3 +297,6 @@ class KinovaEnv:
 
     def rand_act(self):
         return 2*torch.rand((self.num_envs, self.num_actions), device=gs.device, dtype=gs.tc_float) - 1
+
+    def render(self):
+        return self.cam.render()[0]
