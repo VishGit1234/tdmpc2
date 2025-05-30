@@ -9,6 +9,8 @@ services:
     command: /bin/bash -c "python -u train.py"
     # command: tail -f /dev/null
     env_file: "tdmpc2.env"
+    environment:
+      - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
       - ./tdmpc2/logs/:/root/tdmpc2/tdmpc2/logs/
       # - ./tdmpc2/:/root/tdmpc2/tdmpc2/
