@@ -295,17 +295,18 @@ class KinovaEnv:
         push those parameters into the sim.
         """
         
-        if hasattr(self.box, "set_material_params"):
-            if "box_rho" in domain_cfg:
-                self.box.set_material_params(rho=domain_cfg["box_rho"])
-            if "box_friction" in domain_cfg:
-                self.box.set_material_params(friction=domain_cfg["box_friction"])
+        if "box_rho" in domain_cfg:
+            self.box.rho = domain_cfg["box_rho"]
+            
+        if "box_friction" in domain_cfg:
+            self.box.friction = domain_cfg["box_friction"]
 
-        if "box_size" in domain_cfg and hasattr(self.box, "set_size"):
-            self.box.set_size(size=domain_cfg["box_size"])
+        if "box_size" in domain_cfg:
+            self.box.size=domain_cfg["box_size"]
 
-        if "box_color" in domain_cfg and hasattr(self.box, "set_color"):
-            self.box.set_color(color=domain_cfg["box_color"])
+        if "box_color" in domain_cfg:
+            self.box.color=domain_cfg["box_color"]
+        
 
         # plane = self.scene.entities.get("Plane")
         # if plane is not None and hasattr(plane, "set_material_params"):
