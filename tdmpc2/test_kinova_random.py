@@ -10,10 +10,10 @@ class DummyCfg(SimpleNamespace):
 
 
 cfg = DummyCfg(
-    # ---------- make_env requirements ----------
-    num_envs=8,                  # fewer envs → faster test
+
+    num_envs=8,                  
     obs="state",
-    # ---------- KinovaEnv physical / reward ----------
+
     episode_length_s=5,
     init_joint_angles=[
         6.9761, 1.1129, 1.7474, -2.2817, 7.5884, -1.1489,
@@ -30,7 +30,7 @@ cfg = DummyCfg(
     success_reward=1,
     target_displacement=0.3,
     action_scale=0.01,
-    # ---------- placeholders that make_env will overwrite ----------
+
     obs_shape=None,
     action_dim=None,
     episode_length=None,
@@ -58,6 +58,6 @@ for d, cnt in enumerate(hist.tolist()):
     print(f"Domain {d}: {cnt} samples")
 
 assert (hist > 0).all(), (
-    "❌  Some domains were never selected – check your randomization logic!"
+    "❌  Some domains were never selected"
 )
 print("\n✅  Domain randomization appears to be working.")
