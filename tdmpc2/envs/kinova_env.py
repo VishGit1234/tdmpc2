@@ -1,6 +1,7 @@
 import torch
 import math
 import genesis as gs
+import random
 
 class KinovaEnv:
     def __init__(self, num_envs, env_cfg, show_viewer=False):
@@ -36,6 +37,40 @@ class KinovaEnv:
 
         self.dt = 0.02
         self.max_episode_length = math.ceil(env_cfg.episode_length_s / self.dt)
+        
+        # create domain set for domain randomization
+        # Each domain has different box properties, plane friction, and target displacement, etc...
+        self.domain_set = [
+            # ═════════════════ Domain-0 ═════════════════
+            {
+                "box_rho": 300,                 # lighter wood
+                "box_friction": 0.8,
+                "plane_friction": 0.6,
+                "box_color": (0.85, 0.20, 0.20),
+                "target_displacement": 0.25,
+            },
+            # ═════════════════ Domain-1 ═════════════════
+            {
+                "box_rho": 1000,                # dense plastic
+                "box_friction": 0.4,
+                "plane_friction": 0.3,
+                "box_color": (0.20, 0.20, 0.85),
+                "target_displacement": 0.40,
+            },
+            # ═════════════════ Domain-2 ═════════════════
+            {
+                "box_rho": 700,                 # medium density
+                "box_friction": 0.2,
+                "plane_friction": 0.9,
+                "box_color": (0.20, 0.75, 0.35),
+                "target_displacement": 0.32,
+            },
+        ]
+        
+        # Track which domain each parallel env is currently on
+        self.domain_idx = torch.zeros(
+            (num_envs,), dtype=torch.long, device=gs.device
+        )
 
         # create scene
         if show_viewer:
@@ -255,10 +290,45 @@ class KinovaEnv:
 
         return rew_terms
 
+    def _apply_domain(self, envs_idx: torch.Tensor, domain_cfg: dict[str, any]):
+        """
+        Given the indices of envs that are being reset and a domain_config
+        dictionary, push those parameters into the sim.
+        """
+        
+        if "box_rho" in domain_cfg:
+            # Density (kg/m³). 
+            self.box.set_material_params(
+                rho=domain_cfg["box_rho"], envs_idx=envs_idx
+            )
+        if "box_friction" in domain_cfg:
+            self.box.set_material_params(
+                friction=domain_cfg["box_friction"], envs_idx=envs_idx
+            )
+        if "box_size" in domain_cfg:
+            self.box.set_size(size=domain_cfg["box_size"], envs_idx=envs_idx)
+
+        if "box_color" in domain_cfg:
+            self.box.set_color(color=domain_cfg["box_color"], envs_idx=envs_idx)
+
+        if "plane_friction" in domain_cfg:
+            self.scene.entities["Plane"].set_material_params(
+                friction=domain_cfg["plane_friction"]
+            )
+
+
+
     def _reset_idx(self, envs_idx):
         if len(envs_idx) == 0:
             return
 
+        # apply domain randomization
+        for i in envs_idx:
+            new_dom = random.randrange(len(self.domain_set))
+            self.domain_idx[i] = new_dom
+            self._apply_domain(i.unsqueeze(0), self.domain_set[new_dom])
+
+        
         # reset dofs
         self.robot.set_dofs_position(
             position=self.init_joint_angles.unsqueeze(dim=0).repeat(len(envs_idx), 1),
