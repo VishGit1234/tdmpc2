@@ -135,7 +135,7 @@ class KinovaEnv:
             dtype=gs.tc_float,
         )
         self.robot = self.scene.add_entity(
-            gs.morphs.MJCF(file='/root/tdmpc2/tdmpc2/envs/kinova_gen3/gen3.xml'),           
+            gs.morphs.MJCF(file='/Users/Jivan/Desktop/tdmpc2/tdmpc2/envs/kinova_gen3/gen3.xml'),           
         )
 
         # get ee link
@@ -290,43 +290,41 @@ class KinovaEnv:
 
         return rew_terms
 
-    def _apply_domain(self, envs_idx: torch.Tensor, domain_cfg: dict[str, any]):
+    def _apply_domain(self, domain_cfg: dict[str, any]):
         """
-        Given the indices of envs that are being reset and a domain_config
-        dictionary, push those parameters into the sim.
+        push those parameters into the sim.
         """
         
-        if "box_rho" in domain_cfg:
-            # Density (kg/m³). 
-            self.box.set_material_params(
-                rho=domain_cfg["box_rho"], envs_idx=envs_idx
-            )
-        if "box_friction" in domain_cfg:
-            self.box.set_material_params(
-                friction=domain_cfg["box_friction"], envs_idx=envs_idx
-            )
-        if "box_size" in domain_cfg:
-            self.box.set_size(size=domain_cfg["box_size"], envs_idx=envs_idx)
+        if hasattr(self.box, "set_material_params"):
+            if "box_rho" in domain_cfg:
+                self.box.set_material_params(rho=domain_cfg["box_rho"])
+            if "box_friction" in domain_cfg:
+                self.box.set_material_params(friction=domain_cfg["box_friction"])
 
-        if "box_color" in domain_cfg:
-            self.box.set_color(color=domain_cfg["box_color"], envs_idx=envs_idx)
+        if "box_size" in domain_cfg and hasattr(self.box, "set_size"):
+            self.box.set_size(size=domain_cfg["box_size"])
 
-        if "plane_friction" in domain_cfg:
-            self.scene.entities["Plane"].set_material_params(
-                friction=domain_cfg["plane_friction"]
-            )
+        if "box_color" in domain_cfg and hasattr(self.box, "set_color"):
+            self.box.set_color(color=domain_cfg["box_color"])
 
+        # plane = self.scene.entities.get("Plane")
+        # if plane is not None and hasattr(plane, "set_material_params"):
+        #     if "plane_friction" in domain_cfg:
+        #         plane.set_material_params(friction=domain_cfg["plane_friction"])
 
 
     def _reset_idx(self, envs_idx):
         if len(envs_idx) == 0:
             return
 
-        # apply domain randomization
-        for i in envs_idx:
-            new_dom = random.randrange(len(self.domain_set))
-            self.domain_idx[i] = new_dom
-            self._apply_domain(i.unsqueeze(0), self.domain_set[new_dom])
+        # # apply domain randomization
+        # for i in envs_idx:
+        #     new_dom = random.randrange(len(self.domain_set))
+        #     self.domain_idx[i] = new_dom
+        #     self._apply_domain(i.unsqueeze(0), self.domain_set[new_dom])
+        new_dom = random.randrange(len(self.domain_set))
+        self.domain_idx[:] = new_dom                      # log it
+        self._apply_domain(self.domain_set[new_dom])      # apply to all
 
         
         # reset dofs
