@@ -137,7 +137,7 @@ class GaussianSampler(torch.nn.Module):
 	@torch._dynamo.disable()
 	def forward(self, out):
 		"""Returns sample from normal dist from MLP"""
-		mean, log_variance = out.split(out.size(-1) // 2, dim=1)
+		mean, log_variance = out.split(out.size(-1) // 2, dim=-1)
 		variance = torch.log(1 + torch.exp(log_variance))
 		with torch.no_grad():
 			epsilon = torch.randn_like(mean, device=torch.device('cuda:0'))
@@ -146,7 +146,7 @@ class GaussianSampler(torch.nn.Module):
 
 def gaussian_mlp(in_dim, mlp_dims, out_dim, act=None, dropout=0.):
 	"""
-	Basic building block of TD-MPC2.
+	Gaussian MLP, outputs a distribution and samples from it
 	MLP with LayerNorm, Mish activations, and optionally dropout.
 	"""
 	if isinstance(mlp_dims, int):

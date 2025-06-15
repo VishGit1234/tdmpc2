@@ -103,15 +103,15 @@ class KinovaEnv:
             dtype=gs.tc_float
         )
 
-        # add camera for recording 
-        self.cam = self.scene.add_camera(
-                res=(640, 480),
-                pos=(3.5, 0.5, 2.5),
-                lookat=(0, 0, 0.5),
-                up=(0, 0, 1),
-                fov=40,
-                GUI=False
-        )
+        # # add camera for recording 
+        # self.cam = self.scene.add_camera(
+        #         res=(640, 480),
+        #         pos=(3.5, 0.5, 2.5),
+        #         lookat=(0, 0, 0.5),
+        #         up=(0, 0, 1),
+        #         fov=40,
+        #         GUI=False
+        # )
 
         # build
         self.scene.build(n_envs=num_envs)
@@ -299,5 +299,5 @@ class KinovaEnv:
     def rand_act(self):
         return 2*torch.rand((self.num_envs, self.num_actions), device=gs.device, dtype=gs.tc_float) - 1
 
-    def render(self):
-        return self.cam.render()
+    # def render(self):
+    #     return self.cam.render()

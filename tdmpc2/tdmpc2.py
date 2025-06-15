@@ -140,15 +140,15 @@ class TDMPC2(torch.nn.Module):
 		for rollout in range(num_rollouts):
 			z_rollout, G, discount = z.clone(), 0, 1  # Clone the initial state for each rollout
 			for t in range(self.cfg.horizon):
-				reward = math.two_hot_inv(self.model.reward(z_rollout, actions[t], task), self.cfg)
-				z_rollout = self.model.next(z_rollout, actions[t], task)  # Use stochastic next
+				reward = math.two_hot_inv(self.model.reward(z_rollout, actions.select(-3, t), task), self.cfg)
+				z_rollout = self.model.next(z_rollout, actions.select(-3, t), task)  # Use stochastic next
 				G += discount * reward
 				discount_update = self.discount[torch.tensor(task)] if self.cfg.multitask else self.discount
 				discount *= discount_update
 			
 			# Add terminal Q-value to the trajectory value
 			terminal_value = discount * self.model.Q(
-				z_rollout, self.model.pi(z_rollout, task)[1], task, return_type='avg'
+				z_rollout, self.model.pi(z_rollout, task)[0], task, return_type='avg'
 			)
 			total_value += G + terminal_value
 

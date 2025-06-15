@@ -20,7 +20,8 @@ FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
 ENV DEBIAN_FRONTEND=noninteractive
 
 # packages
-RUN apt-get -y update && \
+RUN sed -i 's/\bhttp\b/https/g' /etc/apt/sources.list && \
+    apt-get -y update && \
     apt-get install -y --no-install-recommends build-essential git nano rsync vim tree curl wget \
     swig ffmpeg unzip htop tmux xvfb ca-certificates bash-completion libjpeg-dev libpng-dev \
     libssl-dev libcurl4-openssl-dev libopenmpi-dev zlib1g-dev qtbase5-dev qtdeclarative5-dev \
