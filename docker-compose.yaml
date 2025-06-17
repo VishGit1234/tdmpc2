@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: rl-research:latest
+    image: ghcr.io/vishgit1234/tdmpc2:latest
     command: /bin/bash -c "python3.11 -u train.py"
     # command: tail -f /dev/null
     env_file: "tdmpc2.env"
