@@ -1,51 +1,48 @@
-##########################################
-# Dockerfile for TD-MPC2                 #
-# Nicklas Hansen, 2023 (c)               #
-# https://www.tdmpc2.com                 #
-# -------------------------------------- #
-# Build instructions:                    #
-# docker build . -t <user>/tdmpc2:1.0.1  #
-# docker push <user>/tdmpc2:1.0.1        #
-# -------------------------------------- #
-# Run:                                   #
-# docker run -i \                        #
-#   -v <path>/<to>/tdmpc2:/tdmpc2 \      #
-#   --gpus all \                         #
-#   -t <user>/tdmpc2:1.0.1 \             #
-#   /bin/bash                            #
-##########################################
+FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-devel
 
-# base image
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+ARG PYTHON_VERSION=3.11
 ENV DEBIAN_FRONTEND=noninteractive
+ENV NVIDIA_DRIVER_CAPABILITIES=all
 
-# packages
-RUN apt-get -y update && \
-    apt-get install -y --no-install-recommends build-essential git nano rsync vim tree curl wget \
-    swig ffmpeg unzip htop tmux xvfb ca-certificates bash-completion libjpeg-dev libpng-dev \
-    libssl-dev libcurl4-openssl-dev libopenmpi-dev zlib1g-dev qtbase5-dev qtdeclarative5-dev \
-    libglib2.0-0 libglu1-mesa-dev libgl1-mesa-dev libvulkan1 libgl1-mesa-glx libosmesa6 \
-    libosmesa6-dev libglew-dev mesa-utils && \
-    apt-get clean && \
-    apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/* && \
-    mkdir /root/.ssh
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tmux \
+    git \
+    curl \
+    wget \
+    bash-completion \
+    libgl1 \
+    libgl1-mesa-glx \
+    libegl-dev \
+    libegl1 \
+    libxrender1 \
+    libglib2.0-0 \
+    ffmpeg \
+    libgtk2.0-dev \
+    pkg-config \
+    libvulkan-dev \
+    libgles2 \
+    libglvnd0 \
+    libglx0 \
+    && apt clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# conda environment
-COPY docker/nvidia_icd.json /usr/share/vulkan/icd.d/nvidia_icd.json
-COPY docker/environment.yaml /root
-RUN conda update conda && \
-    conda env update -n base -f /root/environment.yaml && \
-    rm /root/environment.yaml && \
-    conda clean -ya && \
+# --------------------------- Genesis ----------------------------
+# Hash for Genesis commit: 1f2a13676b627dc2f5b1eb54412ca46184ef057b
+RUN pip install --no-cache-dir open3d
+RUN git clone https://github.com/Genesis-Embodied-AI/Genesis.git && \
+    cd Genesis && \
+    pip install . && \
+    pip install --no-cache-dir PyOpenGL==3.1.5
+
+# --------------------------- TD-MPC2 ----------------------------
+COPY docker/requirements.txt /root
+RUN pip install -r /root/requirements.txt && \
     pip cache purge && \
-    conda init
-SHELL ["/bin/bash", "-c"]
-RUN echo "cd /root" >> /root/.bashrc
-# image does not include metaworld, maniskill, myosuite
-# these can be installed separately; see environment.yaml for details
+    rm /root/requirements.txt
 
-RUN sed -i 's/moviepy\.editor/moviepy/g' /opt/conda/lib/python3.10/site-packages/wandb/sdk/data_types/video.py
+# Fix moviepy issue in wandb
+RUN sed -i 's/moviepy\.editor/moviepy/g' /opt/conda/lib/python3.11/site-packages/wandb/sdk/data_types/video.py
 
 WORKDIR /root/tdmpc2/tdmpc2
 

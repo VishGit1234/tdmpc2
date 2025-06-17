@@ -1,0 +1,15 @@
+gymnasium==0.29.1
+ffmpeg==1.4
+h5py==3.11.0
+hydra-core==1.3.2
+hydra-submitit-launcher==1.2.0
+submitit==1.5.1
+omegaconf==2.3.0
+moviepy==2.0.0
+# numpy==1.26.4
+tensordict-nightly==2025.1.1
+torchrl-nightly==2025.1.1
+kornia==0.7.2
+termcolor==2.4.0
+tqdm==4.66.4
+wandb==0.17.4

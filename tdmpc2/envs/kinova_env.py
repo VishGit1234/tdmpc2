@@ -34,37 +34,29 @@ class KinovaEnv:
 
         self.env_cfg = env_cfg
 
-        self.dt = 0.02
+        self.dt = 0.01
         self.max_episode_length = math.ceil(env_cfg.episode_length_s / self.dt)
 
-        # create scene
-        if show_viewer:
-          self.scene = gs.Scene(
-            sim_options=gs.options.SimOptions(dt=self.dt, substeps=2),
-            viewer_options=gs.options.ViewerOptions(
-                max_FPS=int(0.5 / self.dt)
-            ),
-            vis_options=gs.options.VisOptions(rendered_envs_idx=list(range(1))), # Only render one environment
-            rigid_options=gs.options.RigidOptions(
-                dt=self.dt
-            ),
-            show_viewer=show_viewer,
-          )
-        else:
-          self.scene = gs.Scene(
-            sim_options=gs.options.SimOptions(dt=self.dt, substeps=2),
-            rigid_options=gs.options.RigidOptions(
-                dt=self.dt
-            ),
-            show_viewer=show_viewer,
-          )
+        self.scene = gs.Scene(
+          sim_options=gs.options.SimOptions(dt=self.dt, substeps=2),
+          viewer_options=gs.options.ViewerOptions(
+              max_FPS=30
+          ),
+          vis_options=gs.options.VisOptions(
+            rendered_envs_idx=list(range(1))
+          ), # Only render one environment
+          rigid_options=gs.options.RigidOptions(
+              dt=self.dt,
+          ),
+          show_viewer=show_viewer,
+        )
 
         self.cam = self.scene.add_camera(
-              res=(640, 480),
-              pos=(3.5, 0.5, 2.5),
-              lookat=(0, 0, 0.5),
+              res=(320, 240),
+              pos=(1.5, 0.5, 1.0),
+              lookat=(0, 0, 0.2),
               up=(0, 0, 1),
-              fov=40
+              fov=40,
         )
 
         # add plane
@@ -158,6 +150,12 @@ class KinovaEnv:
         qpos[:,-6:] = 0.822 # Keep gripper closed
         self.robot.control_dofs_position(qpos)
         self.scene.step()
+
+        # qpos = self.robot.get_qpos().clone()
+        # qpos[:, :6] += self.env_cfg.action_scale*actions[:, :6] # Only control the first 6 dofs
+        # qpos[:, -6:] = self.env_cfg.action_scale*actions[:, -1].unsqueeze(dim=1) # Control gripper with last action dim
+        # self.robot.control_dofs_position(qpos)
+        # self.scene.step()
 
         # increment episode length
         self.episode_length_buf += 1
