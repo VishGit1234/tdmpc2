@@ -236,7 +236,7 @@ class KinovaEnv:
         self.prev_obs.pop()
 
         return torch.cat(
-            [obs for obs in self.prev_obs],
+            self.prev_obs,
             dim = 1
         )
 
