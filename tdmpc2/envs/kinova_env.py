@@ -28,12 +28,6 @@ class KinovaEnv:
 
         self.num_envs = num_envs
         self.obs_per_step = 10 # no. of dimensions in the observation space per scene step
-        self.obs_buffer_size = 3 # Stores the `obs_buffer_size` previous observations (including current obs)
-        self.num_obs = 30 # total no. of dimensions in the obs space.
-
-        self.prev_obs = []
-        for i in range(self.obs_buffer_size):
-            self.prev_obs.append(torch.zeros((self.num_envs,  self.obs_per_step), device=gs.device, dtype=gs.tc_float))
             
         self.num_actions = 2 # no. of dims in action space
 
@@ -43,6 +37,13 @@ class KinovaEnv:
 
         self.dt = 0.01
         self.max_episode_length = math.ceil(env_cfg.episode_length_s / self.dt)
+
+        self.obs_buffer_size = env_cfg.prev_obs_buffer # Stores the `obs_buffer_size` previous observations (including current obs)
+        self.num_obs = self.obs_buffer_size * self.obs_per_step # total no. of dimensions in the obs space.
+
+        self.prev_obs = []
+        for i in range(self.obs_buffer_size):
+            self.prev_obs.append(torch.zeros((self.num_envs,  self.obs_per_step), device=gs.device, dtype=gs.tc_float))
 
         self.scene = gs.Scene(
           sim_options=gs.options.SimOptions(dt=self.dt, substeps=2),

@@ -16,6 +16,7 @@ class EnvConfig:
     self.success_reward = 1
     self.target_displacement = 0.3
     self.action_scale = 0.05
+    self.prev_obs_buffer = 3
 
 # Create an instance of the configuration
 env_cfg = EnvConfig()
