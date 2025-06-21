@@ -27,7 +27,14 @@ class KinovaEnv:
         """
 
         self.num_envs = num_envs
-        self.num_obs = 10 # no. of dimensions in observation space 
+        self.obs_per_step = 10 # no. of dimensions in the observation space per scene step
+        self.obs_buffer_size = 3 # Stores the `obs_buffer_size` previous observations (including current obs)
+        self.num_obs = 30 # total no. of dimensions in the obs space.
+
+        self.prev_obs = []
+        for i in range(self.obs_buffer_size):
+            self.prev_obs.append(torch.zeros((self.num_envs,  self.obs_per_step), device=gs.device, dtype=gs.tc_float))
+            
         self.num_actions = 2 # no. of dims in action space
 
         self.device = gs.device
@@ -213,7 +220,7 @@ class KinovaEnv:
 
     def _get_observation(self):
         ee_pos_2d = self.bracelet_link.get_pos()[:, :2]
-        return torch.cat(
+        curr_obs = torch.cat(
             [
                 self.goal[:2] - ee_pos_2d, # 2
                 self.box.get_pos()[:, :2] - ee_pos_2d, # 2
@@ -222,6 +229,16 @@ class KinovaEnv:
             ],
             dim=1,
         ) # 10 dims total
+
+        # Add newest obs to the `prev_obs` queue and pop the last obs
+        self.prev_obs.insert(0, curr_obs)
+        self.prev_obs.pop()
+
+        return torch.cat(
+            [obs for obs in self.prev_obs],
+            dim = 1
+        )
+
     
     def _get_reward(self):
         cube_goal_dist = torch.norm(self.goal[:2] - self.box.get_pos()[:, :2], dim=1)
