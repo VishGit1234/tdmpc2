@@ -27,24 +27,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
 
-# --------------------------- Genesis ----------------------------
-# Hash for Genesis commit: 1f2a13676b627dc2f5b1eb54412ca46184ef057b
-RUN pip install --no-cache-dir open3d
-RUN git clone https://github.com/Genesis-Embodied-AI/Genesis.git && \
-    cd Genesis && \
-    pip install . && \
-    pip install --no-cache-dir PyOpenGL==3.1.5
-
 # --------------------------- TD-MPC2 ----------------------------
 COPY docker/requirements.txt /root
 RUN pip install -r /root/requirements.txt && \
     pip cache purge && \
-    rm /root/requirements.txt
+    rm /root/requirements.txt && \
+    conda install -y numpy==1.26.3
 
 # Fix moviepy issue in wandb
 RUN sed -i 's/moviepy\.editor/moviepy/g' /opt/conda/lib/python3.11/site-packages/wandb/sdk/data_types/video.py
 
-WORKDIR /root/tdmpc2/tdmpc2
+WORKDIR /root/tdmpc2
 
 COPY ./tdmpc2 .
 

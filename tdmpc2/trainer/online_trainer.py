@@ -29,7 +29,7 @@ class OnlineTrainer(Trainer):
 		"""Evaluate a TD-MPC2 agent."""
 		ep_rewards, ep_successes, ep_lengths = [], [], []
 		for i in range(self.cfg.eval_episodes // self.cfg.num_envs):
-			obs = self.env.reset()
+			obs, _ = self.env.reset()
 			done = torch.tensor(False)
 			ep_reward = torch.zeros(self.cfg.num_envs, device=obs.device)
 			t = 0
@@ -38,20 +38,21 @@ class OnlineTrainer(Trainer):
 			while not done.any():
 				torch.compiler.cudagraph_mark_step_begin()
 				action = self.agent.act(obs.to(self.cfg.cuda_device), t0=t==0, eval_mode=True)
-				obs, reward, done, info = self.env.step(action)
+				obs, reward, terminated, truncated, info = self.env.step(action)
+				done = terminated | truncated
 				ep_reward += reward
 				t += 1
 				if self.cfg.save_video:
 					self.logger.video.record(self.env)
 			assert done.all(), 'Vectorized environments must reset all environments at once.'
 			ep_rewards.append(ep_reward)
-			ep_successes.append(info['success'])
+			ep_successes.append(info['_success'])
 			ep_lengths.append(t)
 			if self.cfg.save_video:
 				self.logger.video.save(self._step)
 		return dict(
 			episode_reward=torch.cat(ep_rewards).mean().cpu(),
-			episode_success=100*torch.cat(ep_successes).mean().cpu(),
+			episode_success=100*torch.cat(ep_successes).float().mean().cpu(),
 			episode_length=np.nanmean(ep_lengths),
 		)
 
@@ -62,7 +63,7 @@ class OnlineTrainer(Trainer):
 		else:
 			obs = obs.unsqueeze(0)
 		if action is None:
-			action = torch.full_like(self.env.rand_act(), float('nan'))
+			action = torch.full_like(torch.from_numpy(self.env.action_space.sample()), float('nan'))
 		if reward is None:
 			reward = torch.tensor(float('nan')).repeat(self.cfg.num_envs)
 		if terminated is None:
@@ -98,22 +99,23 @@ class OnlineTrainer(Trainer):
 						'Set `episodic=true` to enable support for terminations.')
 					train_metrics.update(
 						episode_reward=torch.cat([td['reward'] for td in self._tds[1:]]).sum(0).mean(),
-						episode_success=info['success'].nanmean(),
+						episode_success=info['_success'].float().nanmean(),
 						episode_length=len(self._tds),
 						episode_terminated=info['terminated'])
 					train_metrics.update(self.common_metrics())
 					self.logger.log(train_metrics, 'train')
 					self._ep_idx = self.buffer.add(torch.cat(self._tds))
 
-				obs = self.env.reset()
+				obs, _ = self.env.reset()
 				self._tds = [self.to_td(obs)]
 
 			# Collect experience
 			if self._step > self.cfg.seed_steps:
 				action = self.agent.act(obs.to(self.cfg.cuda_device), t0=len(self._tds)==1)
 			else:
-				action = self.env.rand_act()
-			obs, reward, done, info = self.env.step(action)
+				action = torch.from_numpy(self.env.action_space.sample()).to(self.cfg.cuda_device)
+			obs, reward, terminated, truncated, info = self.env.step(action)
+			done = terminated | truncated
 			self._tds.append(self.to_td(obs, action, reward))
 
 			# Update agent
