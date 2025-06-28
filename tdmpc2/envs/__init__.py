@@ -30,8 +30,7 @@ try:
 except:
 	make_mujoco_env = missing_dependencies
 
-from envs.kinova_env import KinovaEnv
-import genesis as gs
+from envs.kinova_env import KinovaPushCubeEnv
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
@@ -56,24 +55,34 @@ def make_multitask_env(cfg):
 	cfg.episode_lengths = env._episode_lengths
 	return env
 	
+class ScaleAction(gym.ActionWrapper):  
+  def __init__(self, env, scale_factor=1):
+    super().__init__(env)
+    self.scale_factor = scale_factor
+
+  def action(self, action):
+    if action.ndim == 2:
+      # the gripper should be fixed so set its actions to zero
+      action[:, -4:] = 0
+      # no movement in z-axis
+      action[:, 2] = 0
+    else:
+      # the gripper should be fixed so set its actions to zero
+      action[-4:] = 0
+      # no movement in z-axis
+      action[2] = 0
+    return action*self.scale_factor
 
 def make_env(cfg):
 	"""
 	Make kinova environment for TD-MPC2 experiments.
 	"""
-	gs.init(
-		backend=gs.gpu,
-		logging_level="warning"
-	)
-	env = KinovaEnv(
-		num_envs=cfg.num_envs,
-		env_cfg=cfg,
-		show_viewer=False
-	)
+	env = gym.make("KinovaPushCube", num_envs=cfg.num_envs, render_mode="rgb_array", max_episode_steps=50, control_mode="pd_ee_delta_pose")
+	env = ScaleAction(env, scale_factor=cfg.action_scale)  # Scale down the action space
 
-	cfg.obs_shape = {cfg.get('obs', 'state'): (env.num_obs,)}
-	cfg.action_dim = env.num_actions
-	cfg.episode_length = env.max_episode_length
+	cfg.obs_shape = {cfg.get('obs', 'state'): (env.observation_space.shape[1], )}
+	cfg.action_dim = env.action_space.shape[1]
+	cfg.episode_length = 50 # manually set in KinovaPushCubeEnv
 	cfg.seed_steps = max(1000, 5*cfg.episode_length) * cfg.num_envs
 	return env
 
