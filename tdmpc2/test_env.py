@@ -3,6 +3,13 @@ import gymnasium as gym
 import torch
 import time
 
+# Init kwargs dict
+kwargs = {
+    "block_offset": [0.2, 0.2],
+    "block_gen_range": [0.1, 0.1],
+    "target_offset": [0.3, 0.],
+    "goal_radius": 0.1,
+}
 num_envs = 256
 env = gym.make("KinovaPushCube", num_envs=num_envs, control_mode="pd_ee_delta_pose", render_mode="rgb_array")
 env.unwrapped.print_sim_details()

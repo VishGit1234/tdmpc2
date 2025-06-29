@@ -248,6 +248,10 @@ class KinovaPushCubeEnv(PushCubeEnv):
   ]
 
   def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
+    self.block_offset = kwargs["block_offset"]
+    self.block_gen_range = kwargs["block_gen_range"]
+    self.target_offset = kwargs["target_offset"]
+    self.goal_radius = kwargs["goal_radius"]
     super().__init__(*args, robot_uids=robot_uids, **kwargs)
 
   def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
@@ -261,9 +265,9 @@ class KinovaPushCubeEnv(PushCubeEnv):
       # note that the table scene is built such that z=0 is the surface of the table.
       self.table_scene.initialize(env_idx)
 
-      # here we write some randomization code that randomizes the x, y position of the cube we are pushing in the range [-0.05, -0.05] to [0.05, 0.05]
+      # here we write some randomization code that randomizes the x, y position of the cube we are pushing in the desired range
       xyz = torch.zeros((b, 3))
-      xyz[..., :2] = torch.rand((b, 2)) * 0.1 - 0.05
+      xyz[..., :2] = torch.rand((b, 2)) * torch.tensor(self.block_gen_range) + (self.block_offset - self.block_gen_range/2)
       xyz[..., 2] = self.cube_half_size
       q = [1, 0, 0, 0]
       # we can then create a pose object using Pose.create_from_pq to then set the cube pose with. Note that even though our quaternion
@@ -274,9 +278,10 @@ class KinovaPushCubeEnv(PushCubeEnv):
       obj_pose = Pose.create_from_pq(p=xyz, q=q)
       self.obj.set_pose(obj_pose)
 
-      # here we set the location of that red/white target (the goal region). In particular here, we set the position to be in front of the cube
+      # here we set the location of that red/white target (the goal region). In particular here, we set the position to be a desired given position
       # and we further rotate 90 degrees on the y-axis to make the target object face up
-      target_region_xyz = xyz + torch.tensor([0.1 + self.goal_radius, 0, 0])
+      target_region_xyz = xyz
+      target_region_xyz[..., :2] += torch.tensor(self.target_offset)
       # set a little bit above 0 so the target is sitting on the table
       target_region_xyz[..., 2] = 1e-3
       self.goal_region.set_pose(
