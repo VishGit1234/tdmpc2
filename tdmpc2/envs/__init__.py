@@ -91,7 +91,7 @@ def make_env(cfg):
 		render_mode="rgb_array", 
 		max_episode_steps=50, 
 		control_mode="pd_ee_delta_pose",
-		kwargs=kwargs
+		**kwargs
 	)
 
 	env = ScaleAction(env, scale_factor=cfg.action_scale)  # Scale down the action space
