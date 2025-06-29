@@ -6,13 +6,13 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     image: ghcr.io/vishgit1234/tdmpc2:latest
-    command: /bin/bash -c "python3.11 -u train.py"
+    command: /bin/bash -c "python3 -u train.py"
     # command: tail -f /dev/null
     env_file: "tdmpc2.env"
     environment:
       - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
-      - ./tdmpc2/logs/:/root/tdmpc2/tdmpc2/logs/
+      - ./tdmpc2/logs/:/root/tdmpc2/logs/
       # - ./tdmpc2/:/root/tdmpc2/tdmpc2/
     deploy:
       resources:

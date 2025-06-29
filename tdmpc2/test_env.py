@@ -1,46 +1,41 @@
-from envs.kinova_env import KinovaEnv
-import genesis as gs
+from envs.kinova_env import KinovaPushCubeEnv
+import gymnasium as gym
 import torch
-class EnvConfig:
-  def __init__(self):
-    self.episode_length_s = 3
-    self.init_joint_angles = [6.9761, 1.1129, 1.7474, -2.2817, 7.5884, -1.1489, 1.6530, 0.8213, 0.8200, 0.8209, 0.8208, 0.8217, 0.8210]
-    self.init_quat = [0, 0, 0, 1]
-    self.bracelet_link_height = 0.25
-    self.init_box_pos = [0.2, 0.2, 0.002]
-    self.box_size = [0.08, 0.08, 0.02]
-    self.clip_actions = 0.01
-    self.termination_if_cube_goal_dist_less_than = 0.01
-    self.cube_goal_dist_rew_scale = 10
-    self.cube_arm_dist_rew_scale = 10
-    self.success_reward = 1
-    self.target_displacement = 0.3
-    self.action_scale = 0.05
+import time
 
-# Create an instance of the configuration
-env_cfg = EnvConfig()
-
-# initialize genesis
-gs.init(
-  backend=gs.gpu,
-  # logging_level="warning"
-)
-num_envs = 32
-
-# Create the environment
-env = KinovaEnv(num_envs, env_cfg)
-
-# Run some steps
-obs = env.reset()
+num_envs = 256
+env = gym.make("KinovaPushCube", num_envs=num_envs, control_mode="pd_ee_delta_pose", render_mode="rgb_array")
+env.unwrapped.print_sim_details()
+obs, _ = env.reset(seed=0)
+done = False
+start_time = time.time()
+total_rew = 0
 frames = []
-for i in range(3):
-  done = torch.zeros(num_envs, dtype=torch.bool)
-  while not torch.any(done):
-    action = env.rand_act()
-    obs, reward, done, info = env.step(action)
-    frames.append(env.render())
-    # print(f"Obs: {obs}, Reward: {reward}, Done: {done}, Info: {info}")
+while not done:
+    # note that env.action_space is now a batched action space
+    obs, rew, terminated, truncated, info = env.step(torch.from_numpy(env.action_space.sample()))
+    done = (terminated | truncated).any() # stop if any environment terminates/truncates
+N = num_envs * info["elapsed_steps"][0].item()
+dt = time.time() - start_time
+FPS = N / (dt)
+print(f"Frames Per Second = {N} / {dt} = {FPS}")
 
-# Save the frames as a video
-import imageio.v2 as imageio
-imageio.mimwrite('kinova_env_video.mp4', frames, fps=30)
+print("Now with rendering...")
+
+from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
+obs, _ = env.reset(seed=0)
+done = False
+start_time = time.time()
+total_rew = 0
+frames = []
+while not done:
+    # note that env.action_space is now a batched action space
+    obs, rew, terminated, truncated, info = env.step(torch.from_numpy(env.action_space.sample()))
+    frame = env.render()
+    frames.append(frame)
+    done = (terminated | truncated).any() # stop if any environment terminates/truncates
+N = num_envs * info["elapsed_steps"][0].item()
+dt = time.time() - start_time
+FPS = N / (dt)
+print(f"Frames Per Second = {N} / {dt} = {FPS}")
+ImageSequenceClip(frames, fps=30).write_videofile("output_video.mp4", codec="libx264")

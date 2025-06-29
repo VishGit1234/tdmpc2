@@ -1,315 +1,307 @@
+from typing import Any, Dict, Union
+
+import numpy as np
+import sapien
 import torch
-import math
-import genesis as gs
 
-class KinovaEnv:
-    def __init__(self, num_envs, env_cfg, show_viewer=False):
-        """
-        Initializes the KinovaEnv environment.
+from mani_skill.agents.base_agent import BaseAgent, DictControllerConfig, Keyframe
+from mani_skill.agents.controllers import *
+from mani_skill.agents.controllers.base_controller import ControllerConfig
+from mani_skill.agents.registration import register_agent
+from mani_skill.utils import common, sapien_utils
+from mani_skill.utils.structs.actor import Actor
 
-        Args:
-            num_envs (int): Number of parallel environments.
-            env_cfg (dict): Configuration dictionary for environment settings.  Contains the following keys:
-                - "episode_length_s" (int): Duration of each episode in seconds.
-                - "init_box_pos" (array): Initial position of the box.
-                - "box_size" (tuple): Size of the box.
-                - "init_joint_angles" (array):  Initial joint angles of the robot.
-                - "bracelet_link_height" (float): Height to keep bracelet link at
-                - "init_quat" (array):          Initial orientation (quaternion) of the end-effector.
-                - "clip_actions" (float):     Maximum absolute value for actions.
-                - "termination_if_cube_goal_dist_less_than" (float): Distance threshold for episode termination.
-                - "cube_goal_dist_rew_scale" (float): Scaling factor for the cube-goal distance reward term.
-                - "cube_arm_dist_rew_scale"  (float): Scaling factor for the cube-arm distance reward term.
-                - "success_reward" (int):     Reward given when the task is successful.
-                - "target_displacement" (float): Amount to move box in y-axis 
-                - "action_scale" (float): Scaling factor for actions.
-            show_viewer (bool, optional): Whether to display a viewer. Defaults to False.
-        """
+from mani_skill.utils.registration import register_env
+from mani_skill.envs.tasks.tabletop.push_cube import PushCubeEnv
+from mani_skill.utils.structs import Pose
+from transforms3d.euler import euler2quat
+from mani_skill.utils.structs.types import Array
 
-        self.num_envs = num_envs
-        self.num_obs = 10 # no. of dimensions in observation space 
-        self.num_actions = 2 # no. of dims in action space
 
-        self.device = gs.device
+@register_agent()
+class KinovaGen3(BaseAgent):
+  uid = "kinova_gen3"
+  urdf_path = "/root/tdmpc2/envs/kinova_gen3/Gen3-with-gripper.urdf"
+  disable_self_collisions = True
+  urdf_config = dict(
+    _materials=dict(
+      gripper=dict(static_friction=2.0, dynamic_friction=2.0, restitution=0.0)
+    ),
+    link=dict(
+      left_inner_finger_pad=dict(
+        material="gripper", patch_radius=0.1, min_patch_radius=0.1
+      ),
+      right_inner_finger_pad=dict(
+        material="gripper", patch_radius=0.1, min_patch_radius=0.1
+      ),
+    ),
+  )
+  # List of real joint names from the combined URDF (arm + gripper)
+  arm_joint_names = [
+    "joint_1",
+    "joint_2",
+    "joint_3",
+    "joint_4",
+    "joint_5",
+    "joint_6",
+    "joint_7",
+  ]
+  gripper_joint_names = [
+    "left_outer_knuckle_joint",
+    "right_outer_knuckle_joint",
+    "left_inner_knuckle_joint",
+    "right_inner_knuckle_joint",
+    "left_inner_finger_joint",
+    "right_inner_finger_joint",
+  ]
+  ee_link_name = "end_effector_link"
 
-        self.env_cfg = env_cfg
+  arm_stiffness = 1e3
+  arm_damping = 1e2
+  arm_force_limit = 100
 
-        self.dt = 0.01
-        self.max_episode_length = math.ceil(env_cfg.episode_length_s / self.dt)
+  gripper_stiffness = 1e3
+  gripper_damping = 1e2
+  gripper_force_limit = 100
+  
+  keyframes = dict(
+    rest=Keyframe(
+      qpos=np.array(
+        [0.6961, 1.1129, 1.7474, -2.2817, 1.3084, -1.1489, 3.1415, 0.8210, 0.8210, 0.8210, 0.8210, -0.8210, -0.8210]
+      ),
+      pose=sapien.Pose(),
+    )
+  )
 
-        self.scene = gs.Scene(
-          sim_options=gs.options.SimOptions(dt=self.dt, substeps=2),
-          viewer_options=gs.options.ViewerOptions(
-              max_FPS=30
-          ),
-          vis_options=gs.options.VisOptions(
-            rendered_envs_idx=list(range(1))
-          ), # Only render one environment
-          rigid_options=gs.options.RigidOptions(
-              dt=self.dt,
-          ),
-          show_viewer=show_viewer,
+  @property
+  def _controller_configs(
+    self,
+  ) -> Dict[str, Union[ControllerConfig, DictControllerConfig]]:
+    # Arm joint position controller
+    arm_pd_joint_pos = PDJointPosControllerConfig(
+      joint_names=self.arm_joint_names,
+      lower=None,
+      upper=None,
+      stiffness=self.arm_stiffness,
+      damping=self.arm_damping,
+      force_limit=self.arm_force_limit,
+      normalize_action=False,
+    )
+    # Arm end effector delta position controller
+    arm_pd_ee_delta_pose = PDEEPoseControllerConfig(
+      joint_names=self.arm_joint_names,
+      pos_lower=-0.1,
+      pos_upper=0.1,
+      rot_lower=-0.1,
+      rot_upper=0.1,
+      stiffness=self.arm_stiffness,
+      damping=self.arm_damping,
+      force_limit=self.arm_force_limit,
+      ee_link=self.ee_link_name,
+      urdf_path=self.urdf_path,
+    )
+    # define a passive controller config to simply "turn off" other joints from being controlled and set their properties (damping/friction) to 0.
+    # these joints are controlled passively by the mimic controller later on.
+    passive_finger_joint_names = [
+      "left_inner_knuckle_joint",
+      "right_inner_knuckle_joint",
+      "left_inner_finger_joint",
+      "right_inner_finger_joint",
+    ]
+    passive_finger_joints = PassiveControllerConfig(
+      joint_names=passive_finger_joint_names,
+      damping=0,
+      friction=0,
+    )
+
+    finger_joint_names = ["left_outer_knuckle_joint", "right_outer_knuckle_joint"]
+    # use a mimic controller config to define one action to control both fingers
+    finger_mimic_pd_joint_pos = PDJointPosMimicControllerConfig(
+      joint_names=finger_joint_names,
+      lower=None,
+      upper=None,
+      stiffness=1e5,
+      damping=1e3,
+      force_limit=0.1,
+      friction=0.05,
+      normalize_action=False,
+    )
+    finger_mimic_pd_joint_delta_pos = PDJointPosMimicControllerConfig(
+      joint_names=finger_joint_names,
+      lower=-0.1,
+      upper=0.1,
+      stiffness=1e5,
+      damping=1e3,
+      force_limit=0.1,
+      normalize_action=True,
+      friction=0.05,
+      use_delta=True,
+    )
+    return dict(
+      pd_joint_pos=dict(
+        arm=arm_pd_joint_pos,
+        finger=finger_mimic_pd_joint_pos,
+        passive_finger_joints=passive_finger_joints,
+      ),
+      pd_ee_delta_pose=dict(
+        arm=arm_pd_ee_delta_pose,
+        finger=finger_mimic_pd_joint_delta_pos,
+        passive_finger_joints=passive_finger_joints,
+      ),
+    )
+
+  def _after_loading_articulation(self):
+    outer_finger = self.robot.active_joints_map["right_inner_finger_joint"]
+    inner_knuckle = self.robot.active_joints_map["right_inner_knuckle_joint"]
+    pad = outer_finger.get_child_link()
+    lif = inner_knuckle.get_child_link()
+
+    # the next 4 magic arrays come from https://github.com/haosulab/cvpr-tutorial-2022/blob/master/debug/robotiq.py which was
+    # used to precompute these poses for drive creation
+    p_f_right = [-1.6048949e-08, 3.7600022e-02, 4.3000020e-02]
+    p_p_right = [1.3578170e-09, -1.7901104e-02, 6.5159947e-03]
+    p_f_left = [-1.8080145e-08, 3.7600014e-02, 4.2999994e-02]
+    p_p_left = [-1.4041154e-08, -1.7901093e-02, 6.5159872e-03]
+
+    right_drive = self.scene.create_drive(
+      lif, sapien.Pose(p_f_right), pad, sapien.Pose(p_p_right)
+    )
+    right_drive.set_limit_x(0, 0)
+    right_drive.set_limit_y(0, 0)
+    right_drive.set_limit_z(0, 0)
+
+    outer_finger = self.robot.active_joints_map["left_inner_finger_joint"]
+    inner_knuckle = self.robot.active_joints_map["left_inner_knuckle_joint"]
+    pad = outer_finger.get_child_link()
+    lif = inner_knuckle.get_child_link()
+
+    left_drive = self.scene.create_drive(
+      lif, sapien.Pose(p_f_left), pad, sapien.Pose(p_p_left)
+    )
+    left_drive.set_limit_x(0, 0)
+    left_drive.set_limit_y(0, 0)
+    left_drive.set_limit_z(0, 0)
+
+  def _after_init(self):
+    self.finger1_link = sapien_utils.get_obj_by_name(
+      self.robot.get_links(), "left_inner_finger"
+    )
+    self.finger2_link = sapien_utils.get_obj_by_name(
+      self.robot.get_links(), "right_inner_finger"
+    )
+    self.finger1pad_link = sapien_utils.get_obj_by_name(
+      self.robot.get_links(), "left_inner_finger_pad"
+    )
+    self.finger2pad_link = sapien_utils.get_obj_by_name(
+      self.robot.get_links(), "right_inner_finger_pad"
+    )
+    self.tcp = sapien_utils.get_obj_by_name(
+      self.robot.get_links(), self.ee_link_name
+    )
+  
+  def is_grasping(self, object: Actor, min_force=0.5, max_angle=85):
+    """Check if the robot is grasping an object
+
+    Args:
+      object (Actor): The object to check if the robot is grasping
+      min_force (float, optional): Minimum force before the robot is considered to be grasping the object in Newtons. Defaults to 0.5.
+      max_angle (int, optional): Maximum angle of contact to consider grasping. Defaults to 85.
+    """
+    l_contact_forces = self.scene.get_pairwise_contact_forces(
+      self.finger1_link, object
+    )
+    r_contact_forces = self.scene.get_pairwise_contact_forces(
+      self.finger2_link, object
+    )
+    lforce = torch.linalg.norm(l_contact_forces, axis=1)
+    rforce = torch.linalg.norm(r_contact_forces, axis=1)
+
+    # direction to open the gripper
+    ldirection = self.finger1_link.pose.to_transformation_matrix()[..., :3, 1]
+    rdirection = -self.finger2_link.pose.to_transformation_matrix()[..., :3, 1]
+    langle = common.compute_angle_between(ldirection, l_contact_forces)
+    rangle = common.compute_angle_between(rdirection, r_contact_forces)
+    lflag = torch.logical_and(
+      lforce >= min_force, torch.rad2deg(langle) <= max_angle
+    )
+    rflag = torch.logical_and(
+      rforce >= min_force, torch.rad2deg(rangle) <= max_angle
+    )
+    return torch.logical_and(lflag, rflag)
+
+  def is_static(self, threshold: float = 0.2):
+    qvel = self.robot.get_qvel()[..., :-2]
+    return torch.max(torch.abs(qvel), 1)[0] <= threshold
+  
+  @property
+  def tcp_pos(self):
+    return self.tcp.pose.p
+
+  @property
+  def tcp_pose(self):
+    return self.tcp.pose
+
+@register_env("KinovaPushCube", max_episode_steps=50)
+class KinovaPushCubeEnv(PushCubeEnv):
+  SUPPORTED_ROBOTS = [
+    "kinova_gen3",
+  ]
+
+  def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
+    super().__init__(*args, robot_uids=robot_uids, **kwargs)
+
+  def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
+    # use the torch.device context manager to automatically create tensors on CPU or CUDA depending on self.device, the device the environment runs on
+    with torch.device(self.device):
+      # the initialization functions where you as a user place all the objects and initialize their properties
+      # are designed to support partial resets, where you generate initial state for a subset of the environments.
+      # this is done by using the env_idx variable, which also tells you the batch size
+      b = len(env_idx)
+      # when using scene builders, you must always call .initialize on them so they can set the correct poses of objects in the prebuilt scene
+      # note that the table scene is built such that z=0 is the surface of the table.
+      self.table_scene.initialize(env_idx)
+
+      # here we write some randomization code that randomizes the x, y position of the cube we are pushing in the range [-0.05, -0.05] to [0.05, 0.05]
+      xyz = torch.zeros((b, 3))
+      xyz[..., :2] = torch.rand((b, 2)) * 0.1 - 0.05
+      xyz[..., 2] = self.cube_half_size
+      q = [1, 0, 0, 0]
+      # we can then create a pose object using Pose.create_from_pq to then set the cube pose with. Note that even though our quaternion
+      # is not batched, Pose.create_from_pq will automatically batch p or q accordingly
+      # furthermore, notice how here we do not even use env_idx as a variable to say set the pose for objects in desired
+      # environments. This is because internally any calls to set data on the GPU buffer (e.g. set_pose, set_linear_velocity etc.)
+      # automatically are masked so that you can only set data on objects in environments that are meant to be initialized
+      obj_pose = Pose.create_from_pq(p=xyz, q=q)
+      self.obj.set_pose(obj_pose)
+
+      # here we set the location of that red/white target (the goal region). In particular here, we set the position to be in front of the cube
+      # and we further rotate 90 degrees on the y-axis to make the target object face up
+      target_region_xyz = xyz + torch.tensor([0.1 + self.goal_radius, 0, 0])
+      # set a little bit above 0 so the target is sitting on the table
+      target_region_xyz[..., 2] = 1e-3
+      self.goal_region.set_pose(
+        Pose.create_from_pq(
+          p=target_region_xyz,
+          q=euler2quat(0, np.pi / 2, 0),
         )
+      )
+      # set the keyframe for the robot
+      self.agent.robot.set_qpos(self.agent.keyframes["rest"].qpos)
 
-        self.cam = self.scene.add_camera(
-              res=(320, 240),
-              pos=(1.5, 0.5, 1.0),
-              lookat=(0, 0, 0.2),
-              up=(0, 0, 1),
-              fov=40,
-        )
+  def evaluate(self):
+    info = super().evaluate()
+    if "success" in info:
+      info["_success"] = info.pop("success")
+    info["terminated"] = False
+    return info
 
-        # add plane
-        self.scene.add_entity(
-            gs.morphs.Plane(),
-        )
-        # add box
-        self.init_box_pos = torch.tensor(
-            list(self.env_cfg.init_box_pos),
-            device=gs.device,
-            dtype=gs.tc_float
-        )
-        self.goal = torch.clone(self.init_box_pos)
-        self.goal[1] += self.env_cfg.target_displacement
-        self.box = self.scene.add_entity(
-            gs.morphs.Box(
-                pos=self.env_cfg.init_box_pos, # (0.2, 0.2, 0.02)
-                size=self.env_cfg.box_size # (0.08, 0.08, 0.02)
-            ),
-            gs.materials.Rigid(
-                rho=400, # 400 kg/m^3 -> density of some types of wood
-                friction=None
-            ), # The params here can be used for domain randomization
-            gs.surfaces.Default(
-                color=(196/255, 30/255, 58/255) # make block red
-            )
-        )
+  def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
+    info["success"] = torch.zeros(self.num_envs, dtype=bool, device=self.device)
+    reward = super().compute_dense_reward(obs, action, info)
+    info.pop("success")
+    reward[info["_success"]] = 4
+    return reward
 
-        # add robot
-        self.init_joint_angles = torch.tensor(
-            self.env_cfg.init_joint_angles,
-            device=gs.device,
-            dtype=gs.tc_float,
-        )
-        self.robot = self.scene.add_entity(
-            gs.morphs.MJCF(file='/root/tdmpc2/tdmpc2/envs/kinova_gen3/gen3.xml'),           
-        )
-
-        # get ee link
-        self.bracelet_link = self.robot.get_link('bracelet_link')
-        self.ee_init_quat = torch.tensor(
-            self.env_cfg.init_quat,
-            device=gs.device,
-            dtype=gs.tc_float
-        )
-
-        # # add camera for recording 
-        # self.cam = self.scene.add_camera(
-        #         res=(640, 480),
-        #         pos=(3.5, 0.5, 2.5),
-        #         lookat=(0, 0, 0.5),
-        #         up=(0, 0, 1),
-        #         fov=40,
-        #         GUI=False
-        # )
-
-        # build
-        self.scene.build(n_envs=num_envs)
-        # self.cam.start_recording()
-        # for i in range(120):
-        #     self.scene.step()
-        #     self.cam.render()
-        # self.cam.stop_recording(save_to_filename='video.mp4', fps=60)
-
-        # buffers
-        self.obs_buf = torch.zeros((self.num_envs, self.num_obs), device=gs.device, dtype=gs.tc_float)
-        self.rew_buf = torch.zeros((self.num_envs,), device=gs.device, dtype=gs.tc_float)
-        self.reset_buf = torch.ones((self.num_envs,), device=gs.device, dtype=gs.tc_int)
-        self.episode_length_buf = torch.zeros((self.num_envs,), device=gs.device, dtype=gs.tc_int)
-        self.episode_sums = {
-            "cube_goal_dist_rew" : torch.zeros((self.num_envs,), device=gs.device, dtype=gs.tc_float),
-            "cube_arm_dist_rew" : torch.zeros((self.num_envs,), device=gs.device, dtype=gs.tc_float),
-            "success_rew" : torch.zeros((self.num_envs,), device=gs.device, dtype=gs.tc_float),
-        }
-        self.info = dict()
-        self.info["observations"] = dict() # Only for PPO library
-        self.info["success"] = torch.zeros((self.num_envs,), device=gs.device, dtype=gs.tc_float)
-
-        # set to initial state
-        self._reset_idx(torch.arange(self.num_envs, device=gs.device))
-        self.scene.step()
-
-        # tanh layer
-        self.tanh = torch.nn.Tanh()
-        self.tanh.to(device=gs.device)
-
-    def step(self, actions):
-        # Clamp action between bounds
-        clipped_actions = torch.clip(self.env_cfg.action_scale*actions, -self.env_cfg.clip_actions, self.env_cfg.clip_actions)
-        new_pos = self.bracelet_link.get_pos()
-        new_pos[:, 0] += clipped_actions[:, 0]
-        new_pos[:, 1] += clipped_actions[:, 1]
-        new_pos[:, 2] = self.env_cfg.bracelet_link_height
-
-        # Clip new pos to be within bounds of robot
-        clipped_new_pos = new_pos.clone()
-        clipped_new_pos[:, 0] = torch.clip(new_pos[:, 0], -0.5, 0.5)
-        clipped_new_pos[:, 1] = torch.clip(new_pos[:, 1], -0.5, 0.5)
-        
-        # Compute inverse kinematics after applying delta ee pos
-        qpos = self.robot.inverse_kinematics(
-            link = self.bracelet_link,
-            pos  = clipped_new_pos,
-            quat = self.ee_init_quat.unsqueeze(dim=0).repeat(self.num_envs, 1),
-        )
-        qpos[:,-6:] = 0.822 # Keep gripper closed
-        self.robot.control_dofs_position(qpos)
-        self.scene.step()
-
-        # qpos = self.robot.get_qpos().clone()
-        # qpos[:, :6] += self.env_cfg.action_scale*actions[:, :6] # Only control the first 6 dofs
-        # qpos[:, -6:] = self.env_cfg.action_scale*actions[:, -1].unsqueeze(dim=1) # Control gripper with last action dim
-        # self.robot.control_dofs_position(qpos)
-        # self.scene.step()
-
-        # increment episode length
-        self.episode_length_buf += 1
-
-        # compute reward
-        self.rew_buf[:] = 0.0
-        rew_terms = self._get_reward()
-        for key in self.episode_sums.keys():
-            self.rew_buf += rew_terms[key]
-            self.episode_sums[key] += rew_terms[key]
-
-        # # check termination and reset
-        # # terminate if box is at goal
-        # self.reset_buf = torch.norm(self.goal[:2] - self.box.get_pos()[:, :2], dim=1) < self.env_cfg.termination_if_cube_goal_dist_less_than
-        # self.info["success"][:] = self.reset_buf.int()
-        # # terminate if episode length is reached
-        # self.reset_buf |= self.episode_length_buf > self.max_episode_length
-        # # terminate if robot is out of bounds
-        # self.reset_buf |= (torch.abs(new_pos[:, 0]) > 0.5)
-        # self.reset_buf |= (torch.abs(new_pos[:, 1]) > 0.5)
-        # # terminate if action is out of bounds
-        # self.reset_buf |= (torch.abs(clipped_actions[:, 0]) > self.env_cfg.clip_actions)
-        # self.reset_buf |= (torch.abs(clipped_actions[:, 1]) > self.env_cfg.clip_actions)
-
-        # for tdmpc2 all envs must terminate at same time 
-        self.reset_buf = self.episode_length_buf > self.max_episode_length
-
-        time_out_idx = torch.flatten(torch.nonzero(self.episode_length_buf > self.max_episode_length, as_tuple=False).nonzero(as_tuple=False))
-        self.info["time_outs"] = torch.zeros_like(self.reset_buf, device=gs.device, dtype=gs.tc_float)
-        self.info["time_outs"][time_out_idx] = 1.0
-        
-        # Reset environments that have terminated
-        self._reset_idx(torch.flatten(torch.nonzero(self.reset_buf, as_tuple=False)))
-
-        # compute observations
-        self.obs_buf = self._get_observation()
-
-        # set info termination (only for tdmpc2)
-        self.info['terminated'] = torch.tensor(0.0, device=gs.device, dtype=gs.tc_float)
-
-        return self.obs_buf, self.rew_buf, self.reset_buf, self.info
-    
-    def get_observations(self):
-        """
-        Only for getting observation shape
-        Used by PPO Library
-        """
-        return self.obs_buf, self.info
-    
-    def get_privileged_observations(self):
-        """
-        Only used by PPO library
-        """
-        return None
-
-    def _get_observation(self):
-        ee_pos_2d = self.bracelet_link.get_pos()[:, :2]
-        return torch.cat(
-            [
-                self.goal[:2] - ee_pos_2d, # 2
-                self.box.get_pos()[:, :2] - ee_pos_2d, # 2
-                self.box.get_vel()[:, :2], # 2
-                self.box.get_quat(), # 4
-            ],
-            dim=1,
-        ) # 10 dims total
-    
-    def _get_reward(self):
-        cube_goal_dist = torch.norm(self.goal[:2] - self.box.get_pos()[:, :2], dim=1)
-        # Note: cube-arm dist doesn't account for width of box yet
-        w, z = self.box.get_quat()[:, 0], self.box.get_quat()[:, 3]
-        cube_back_pos = self.box.get_pos()[:, :2] + (self.env_cfg.box_size[1] / 2)*torch.stack([2*w*z, 2*z**2 - 1], dim=1)
-        cube_arm_dist = torch.norm(self.bracelet_link.get_pos()[:, :2] - cube_back_pos, dim=1)
-
-        # success = (cube_goal_dist < self.env_cfg.termination_if_cube_goal_dist_less_than).int()      
-        success = (torch.abs(self.goal[1] - self.box.get_pos()[:, 1]) < self.env_cfg.termination_if_cube_goal_dist_less_than)
-        success &= (torch.abs(self.goal[0] - self.box.get_pos()[:, 0]) < self.env_cfg.termination_if_cube_goal_dist_less_than*10)
-        self.info["success"][:] = success.int()
-
-        # reward terms
-        INIT_CUBE_ARM_DIST = 0.2
-        rew_terms = {
-            "cube_goal_dist_rew": torch.where(
-                cube_goal_dist > 0.1,
-                self.env_cfg.target_displacement*self.env_cfg.cube_goal_dist_rew_scale - self.env_cfg.cube_goal_dist_rew_scale*cube_goal_dist,
-                (self.env_cfg.target_displacement*self.env_cfg.cube_goal_dist_rew_scale - self.env_cfg.cube_goal_dist_rew_scale*cube_goal_dist)/10
-            ),
-            "cube_arm_dist_rew": torch.where(
-                cube_arm_dist > INIT_CUBE_ARM_DIST,
-                INIT_CUBE_ARM_DIST*self.env_cfg.cube_arm_dist_rew_scale - self.env_cfg.cube_arm_dist_rew_scale*cube_arm_dist,
-                (INIT_CUBE_ARM_DIST*self.env_cfg.cube_arm_dist_rew_scale - self.env_cfg.cube_arm_dist_rew_scale*cube_arm_dist)/10
-            ),
-            "success_rew" : self.env_cfg.success_reward*success.int(),
-        }
-
-        return rew_terms
-
-    def _reset_idx(self, envs_idx):
-        if len(envs_idx) == 0:
-            return
-
-        # reset dofs
-        self.robot.set_dofs_position(
-            position=self.init_joint_angles.unsqueeze(dim=0).repeat(len(envs_idx), 1),
-            zero_velocity=True,
-            envs_idx=envs_idx,
-        )
-
-        # reset box
-        self.box.set_pos(
-            pos=self.init_box_pos.unsqueeze(dim=0).repeat(len(envs_idx), 1),
-            zero_velocity=True,
-            envs_idx=envs_idx
-        )
-
-        self.box.set_quat(
-            quat=torch.tensor([1,0,0,0]).unsqueeze(dim=0).repeat(len(envs_idx), 1),
-            zero_velocity=True,
-            envs_idx=envs_idx
-        )
-
-        # reset buffers
-        self.episode_length_buf[envs_idx] = 0
-        # self.reset_buf[envs_idx] = True
-
-        # fill info
-        self.info["episode"] = {}
-        for key in self.episode_sums.keys():
-            self.info["episode"][key] = torch.mean(self.episode_sums[key][envs_idx]).item() # / self.env_cfg["episode_length_s"]
-            self.episode_sums[key][envs_idx] = 0.0
-        self.info["episode"]["success_pct"] = 100*torch.mean(self.info["success"][envs_idx]).item()
-
-    def reset(self):
-        self._reset_idx(torch.arange(self.num_envs, device=gs.device))
-        self.obs_buf = self._get_observation()
-        return self.obs_buf
-
-    def rand_act(self):
-        return 2*torch.rand((self.num_envs, self.num_actions), device=gs.device, dtype=gs.tc_float) - 1
-
-    def render(self):
-        return self.cam.render()[0]
+  def render(self):
+    # Return the rendered image from the first environment in the batch
+    return super().render()[0].cpu().numpy()
