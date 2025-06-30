@@ -10,6 +10,7 @@ from mani_skill.agents.controllers.base_controller import ControllerConfig
 from mani_skill.agents.registration import register_agent
 from mani_skill.utils import common, sapien_utils
 from mani_skill.utils.structs.actor import Actor
+from mani_skill.sensors.camera import CameraConfig
 
 from mani_skill.utils.registration import register_env
 from mani_skill.envs.tasks.tabletop.push_cube import PushCubeEnv
@@ -21,7 +22,7 @@ from mani_skill.utils.structs.types import Array
 @register_agent()
 class KinovaGen3(BaseAgent):
   uid = "kinova_gen3"
-  urdf_path = "/root/tdmpc2/envs/kinova_gen3/Gen3-with-gripper.urdf"
+  urdf_path = "/home/vishal/Documents/tdmpc2/tdmpc2/envs/kinova_gen3/Gen3-with-gripper.urdf"
   disable_self_collisions = True
   urdf_config = dict(
     _materials=dict(
@@ -67,7 +68,7 @@ class KinovaGen3(BaseAgent):
   keyframes = dict(
     rest=Keyframe(
       qpos=np.array(
-        [0.6961, 1.1129, 1.7474, -2.2817, 1.3084, -1.1489, 3.1415, 0.8210, 0.8210, 0.8210, 0.8210, -0.8210, -0.8210]
+        [0.6961, 1.1129, 1.7474, -2.2817, 1.3084, -1.1489, 4.7124, 0.8210, 0.8210, 0.8210, 0.8210, -0.8210, -0.8210]
       ),
       pose=sapien.Pose(),
     )
@@ -248,7 +249,24 @@ class KinovaPushCubeEnv(PushCubeEnv):
   ]
 
   def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
+    self.block_offset = kwargs["block_offset"]
+    self.block_gen_range = kwargs["block_gen_range"]
+    self.target_offset = kwargs["target_offset"]
+    self.goal_radius = kwargs["goal_radius"]
+    
+    del kwargs["block_offset"]
+    del kwargs["block_gen_range"]
+    del kwargs["target_offset"]
+    del kwargs["goal_radius"]
     super().__init__(*args, robot_uids=robot_uids, **kwargs)
+
+  @property
+  def _default_human_render_camera_configs(self):
+      # registers a more high-definition (512x512) camera used just for rendering when render_mode="rgb_array" or calling env.render_rgb_array()
+      pose = sapien_utils.look_at([-0.1, 1.7, 1.2], [-0.1, 0.8, 0.35])
+      return CameraConfig(
+          "render_camera", pose=pose, width=512, height=512, fov=1, near=0.01, far=100
+      )
 
   def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
     # use the torch.device context manager to automatically create tensors on CPU or CUDA depending on self.device, the device the environment runs on
@@ -261,9 +279,11 @@ class KinovaPushCubeEnv(PushCubeEnv):
       # note that the table scene is built such that z=0 is the surface of the table.
       self.table_scene.initialize(env_idx)
 
-      # here we write some randomization code that randomizes the x, y position of the cube we are pushing in the range [-0.05, -0.05] to [0.05, 0.05]
+      # here we write some randomization code that randomizes the x, y position of the cube we are pushing in the desired range
       xyz = torch.zeros((b, 3))
-      xyz[..., :2] = torch.rand((b, 2)) * 0.1 - 0.05
+      block_gen_range = torch.tensor(self.block_gen_range)
+      block_offset = torch.tensor(self.block_offset)
+      xyz[..., :2] = torch.rand((b, 2)) * block_gen_range + (block_offset - block_gen_range/2)
       xyz[..., 2] = self.cube_half_size
       q = [1, 0, 0, 0]
       # we can then create a pose object using Pose.create_from_pq to then set the cube pose with. Note that even though our quaternion
@@ -274,9 +294,10 @@ class KinovaPushCubeEnv(PushCubeEnv):
       obj_pose = Pose.create_from_pq(p=xyz, q=q)
       self.obj.set_pose(obj_pose)
 
-      # here we set the location of that red/white target (the goal region). In particular here, we set the position to be in front of the cube
+      # here we set the location of that red/white target (the goal region). In particular here, we set the position to be a desired given position
       # and we further rotate 90 degrees on the y-axis to make the target object face up
-      target_region_xyz = xyz + torch.tensor([0.1 + self.goal_radius, 0, 0])
+      target_region_xyz = xyz.clone()
+      target_region_xyz[..., :2] += torch.tensor(self.target_offset)
       # set a little bit above 0 so the target is sitting on the table
       target_region_xyz[..., 2] = 1e-3
       self.goal_region.set_pose(
@@ -296,9 +317,38 @@ class KinovaPushCubeEnv(PushCubeEnv):
     return info
 
   def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
-    info["success"] = torch.zeros(self.num_envs, dtype=bool, device=self.device)
-    reward = super().compute_dense_reward(obs, action, info)
-    info.pop("success")
+    # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
+    tcp_push_pose = Pose.create_from_pq(
+        p=self.obj.pose.p
+        # Note the below line will change based on where the cube is placed
+        + torch.tensor([0, -self.cube_half_size - 0.005, 0], device=self.device)
+    )
+    tcp_to_push_pose = tcp_push_pose.p - self.agent.tcp.pose.p
+    tcp_to_push_pose_dist = torch.linalg.norm(tcp_to_push_pose, axis=1)
+    reaching_reward = 1 - torch.tanh(5 * tcp_to_push_pose_dist)
+    reward = reaching_reward
+
+    # compute a placement reward to encourage robot to move the cube to the center of the goal region
+    # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired push pose
+    # This reward design helps train RL agents faster by staging the reward out.
+    reached = tcp_to_push_pose_dist < 0.01
+    obj_to_goal_dist = torch.linalg.norm(
+        self.obj.pose.p[..., :2] - self.goal_region.pose.p[..., :2], axis=1
+    )
+    place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
+    reward += place_reward * reached
+    
+    # Compute a z reward to encourage the robot to keep the cube on the table
+    desired_obj_z = self.cube_half_size
+    current_obj_z = self.obj.pose.p[..., 2]
+    z_deviation = torch.abs(current_obj_z - desired_obj_z)
+    z_reward = 1 - torch.tanh(5 * z_deviation)
+    # We multiply the z reward by the place_reward and reached mask so that 
+    #   we only add the z reward if the robot has reached the desired push pose
+    #   and the z reward becomes more important as the robot gets closer to the goal.
+    reward += place_reward * z_reward * reached
+
+    # assign rewards to parallel environments that achieved success to the maximum of 3.
     reward[info["_success"]] = 4
     return reward
 
