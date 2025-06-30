@@ -5,9 +5,9 @@ import time
 
 # Init kwargs dict
 kwargs = {
-    "block_offset": [0.1, 0.1],
+    "block_offset": [-0.3, 0.2],
     "block_gen_range": [0.1, 0.1],
-    "target_offset": [0.3, 0.],
+    "target_offset": [0., 0.2],
     "goal_radius": 0.1,
 }
 num_envs = 256

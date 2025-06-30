@@ -10,6 +10,7 @@ from mani_skill.agents.controllers.base_controller import ControllerConfig
 from mani_skill.agents.registration import register_agent
 from mani_skill.utils import common, sapien_utils
 from mani_skill.utils.structs.actor import Actor
+from mani_skill.sensors.camera import CameraConfig
 
 from mani_skill.utils.registration import register_env
 from mani_skill.envs.tasks.tabletop.push_cube import PushCubeEnv
@@ -21,7 +22,7 @@ from mani_skill.utils.structs.types import Array
 @register_agent()
 class KinovaGen3(BaseAgent):
   uid = "kinova_gen3"
-  urdf_path = "/root/tdmpc2/envs/kinova_gen3/Gen3-with-gripper.urdf"
+  urdf_path = "/home/vishal/Documents/tdmpc2/tdmpc2/envs/kinova_gen3/Gen3-with-gripper.urdf"
   disable_self_collisions = True
   urdf_config = dict(
     _materials=dict(
@@ -67,7 +68,7 @@ class KinovaGen3(BaseAgent):
   keyframes = dict(
     rest=Keyframe(
       qpos=np.array(
-        [0.6961, 1.1129, 1.7474, -2.2817, 1.3084, -1.1489, 3.1415, 0.8210, 0.8210, 0.8210, 0.8210, -0.8210, -0.8210]
+        [0.6961, 1.1129, 1.7474, -2.2817, 1.3084, -1.1489, 4.7124, 0.8210, 0.8210, 0.8210, 0.8210, -0.8210, -0.8210]
       ),
       pose=sapien.Pose(),
     )
@@ -259,6 +260,14 @@ class KinovaPushCubeEnv(PushCubeEnv):
     del kwargs["goal_radius"]
     super().__init__(*args, robot_uids=robot_uids, **kwargs)
 
+  @property
+  def _default_human_render_camera_configs(self):
+      # registers a more high-definition (512x512) camera used just for rendering when render_mode="rgb_array" or calling env.render_rgb_array()
+      pose = sapien_utils.look_at([-0.1, 1.7, 1.2], [-0.1, 0.8, 0.35])
+      return CameraConfig(
+          "render_camera", pose=pose, width=512, height=512, fov=1, near=0.01, far=100
+      )
+
   def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
     # use the torch.device context manager to automatically create tensors on CPU or CUDA depending on self.device, the device the environment runs on
     with torch.device(self.device):
@@ -287,9 +296,8 @@ class KinovaPushCubeEnv(PushCubeEnv):
 
       # here we set the location of that red/white target (the goal region). In particular here, we set the position to be a desired given position
       # and we further rotate 90 degrees on the y-axis to make the target object face up
-      target_region_xyz = torch.zeros((b,3))
-      target_offset = torch.tensor(self.target_offset)
-      target_region_xyz[..., :2] += target_offset
+      target_region_xyz = xyz.clone()
+      target_region_xyz[..., :2] += torch.tensor(self.target_offset)
       # set a little bit above 0 so the target is sitting on the table
       target_region_xyz[..., 2] = 1e-3
       self.goal_region.set_pose(
