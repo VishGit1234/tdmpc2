@@ -6,18 +6,11 @@ task: kinova_sweep
 obs: state
 episodic: false
 num_envs: 64
-episode_length_s : 5
-init_joint_angles: [6.9761, 1.1129, 1.7474, -2.2817, 7.5884, -1.1489, 1.6530, 0.8213, 0.8200, 0.8209, 0.8208, 0.8217, 0.8210]
-init_quat: [0, 0, 0, 1]
-bracelet_link_height: 0.25
-init_box_pos: [0.2, 0.2]
+init_box_pos: [-0.3, 0.2]
 box_gen_range: [0.1, 0.1]
 box_size: [0.08, 0.08, 0.02]
-termination_if_cube_goal_dist_less_than: 0.01
-cube_goal_dist_rew_scale: 10
-cube_arm_dist_rew_scale: 10
-success_reward: 1
-target_pos: [0.3, 0.]
+termination_if_cube_goal_dist_less_than: 0.1
+target_pos: [0., 0.2]
 action_scale: 0.5
 
 # evaluation
@@ -90,7 +83,7 @@ save_csv: false
 compile: false
 save_video: true
 save_agent: true
-seed: 7
+seed: 1
 
 # convenience
 work_dir: ???

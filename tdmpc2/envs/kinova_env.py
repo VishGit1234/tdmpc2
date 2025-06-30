@@ -317,9 +317,38 @@ class KinovaPushCubeEnv(PushCubeEnv):
     return info
 
   def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
-    info["success"] = torch.zeros(self.num_envs, dtype=bool, device=self.device)
-    reward = super().compute_dense_reward(obs, action, info)
-    info.pop("success")
+    # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
+    tcp_push_pose = Pose.create_from_pq(
+        p=self.obj.pose.p
+        # Note the below line will change based on where the cube is placed
+        + torch.tensor([0, -self.cube_half_size - 0.005, 0], device=self.device)
+    )
+    tcp_to_push_pose = tcp_push_pose.p - self.agent.tcp.pose.p
+    tcp_to_push_pose_dist = torch.linalg.norm(tcp_to_push_pose, axis=1)
+    reaching_reward = 1 - torch.tanh(5 * tcp_to_push_pose_dist)
+    reward = reaching_reward
+
+    # compute a placement reward to encourage robot to move the cube to the center of the goal region
+    # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired push pose
+    # This reward design helps train RL agents faster by staging the reward out.
+    reached = tcp_to_push_pose_dist < 0.01
+    obj_to_goal_dist = torch.linalg.norm(
+        self.obj.pose.p[..., :2] - self.goal_region.pose.p[..., :2], axis=1
+    )
+    place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
+    reward += place_reward * reached
+    
+    # Compute a z reward to encourage the robot to keep the cube on the table
+    desired_obj_z = self.cube_half_size
+    current_obj_z = self.obj.pose.p[..., 2]
+    z_deviation = torch.abs(current_obj_z - desired_obj_z)
+    z_reward = 1 - torch.tanh(5 * z_deviation)
+    # We multiply the z reward by the place_reward and reached mask so that 
+    #   we only add the z reward if the robot has reached the desired push pose
+    #   and the z reward becomes more important as the robot gets closer to the goal.
+    reward += place_reward * z_reward * reached
+
+    # assign rewards to parallel environments that achieved success to the maximum of 3.
     reward[info["_success"]] = 4
     return reward
 
