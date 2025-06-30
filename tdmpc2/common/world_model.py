@@ -60,7 +60,7 @@ class WorldModel(nn.Module):
 	def __repr__(self):
 		repr = 'TD-MPC2 World Model\n'
 		modules = ['Encoder', 'Dynamics', 'Reward', 'Termination', 'Policy prior', 'Q-functions']
-		for i, m in enumerate([self._encoder, self._dynamics, self._reward, self._termination, self._pi, self._Qs]):
+		for i, m in enumerate([self._encoder, self._stochastic_dynamics, self._reward, self._termination, self._pi, self._Qs]):
 			if m == self._termination and not self.cfg.episodic:
 				continue
 			repr += f"{modules[i]}: {m}\n"

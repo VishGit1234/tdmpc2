@@ -81,7 +81,7 @@ save_csv: false
 
 # misc
 compile: false
-save_video: false
+save_video: true
 save_agent: true
 seed: 1
 
