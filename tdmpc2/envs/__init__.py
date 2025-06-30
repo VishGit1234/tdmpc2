@@ -77,7 +77,23 @@ def make_env(cfg):
 	"""
 	Make kinova environment for TD-MPC2 experiments.
 	"""
-	env = gym.make("KinovaPushCube", num_envs=cfg.num_envs, render_mode="rgb_array", max_episode_steps=50, control_mode="pd_ee_delta_pose")
+	# Init kwargs dict
+	kwargs = {
+		"block_offset": cfg.init_box_pos,
+		"block_gen_range": cfg.box_gen_range,
+		"target_offset": cfg.target_pos,
+		"goal_radius": cfg.termination_if_cube_goal_dist_less_than,
+	}
+
+	env = gym.make(
+		"KinovaPushCube",
+		num_envs=cfg.num_envs,
+		render_mode="rgb_array", 
+		max_episode_steps=50, 
+		control_mode="pd_ee_delta_pose",
+		**kwargs
+	)
+
 	env = ScaleAction(env, scale_factor=cfg.action_scale)  # Scale down the action space
 
 	cfg.obs_shape = {cfg.get('obs', 'state'): (env.observation_space.shape[1], )}
