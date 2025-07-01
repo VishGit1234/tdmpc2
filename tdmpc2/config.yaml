@@ -6,7 +6,7 @@ task: kinova_sweep
 obs: state
 episodic: false
 num_envs: 64
-obs_buffer_size: 3
+obs_buffer_size: 10
 init_box_pos: [-0.3, 0.2]
 box_gen_range: [0.1, 0.1]
 box_size: [0.08, 0.08, 0.02]
@@ -62,12 +62,12 @@ vmin: -10
 vmax: +10
 
 # architecture
-model_size: 1 # preset config, below ignored
+model_size: ??? # preset config, below ignored
 num_enc_layers: 2
-enc_dim: 256
+enc_dim: 128
 num_channels: 32
-mlp_dim: 384
-latent_dim: 128
+mlp_dim: 128
+latent_dim: 96
 task_dim: 96
 num_q: 2
 dropout: 0.01

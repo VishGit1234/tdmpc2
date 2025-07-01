@@ -316,6 +316,28 @@ class KinovaPushCubeEnv(PushCubeEnv):
     info["terminated"] = False
     return info
 
+  def _get_obs_extra(self, info: Dict):
+    # some useful observation info for solving the task includes the pose of the tcp (tool center point) which is the point between the
+    # grippers of the robot
+    obs = dict(
+        tcp_pose=self.agent.tcp.pose.raw_pose,
+    )
+    if self.obs_mode_struct.use_state:
+      # if the observation mode requests to use state, we provide ground truth information about where the cube is.
+      # for visual observation modes one should rely on the sensed visual data to determine where the cube is
+      obs.update(
+          goal_pos=self.goal_region.pose.p,
+          obj_pose=self.obj.pose.raw_pose,
+      )
+    return obs
+
+  def _get_obs_state_dict(self, info: Dict):
+    """Get (ground-truth) state-based observations."""
+    return dict(
+        # agent=self._get_obs_agent(),
+        extra=self._get_obs_extra(info),
+    )
+
   def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
     # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
     tcp_push_pose = Pose.create_from_pq(
