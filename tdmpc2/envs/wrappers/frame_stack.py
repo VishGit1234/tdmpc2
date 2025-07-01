@@ -153,9 +153,9 @@ class FrameStack(gym.ObservationWrapper, gym.utils.RecordConstructorArgs):
 
         self.frames = deque(maxlen=num_stack)
 
-        low = np.repeat(self.observation_space.low[np.newaxis, ...], num_stack, axis=0)
+        low = np.repeat(self.observation_space.low[...], num_stack, axis=1)
         high = np.repeat(
-            self.observation_space.high[np.newaxis, ...], num_stack, axis=0
+            self.observation_space.high[...], num_stack, axis=1
         )
         self.observation_space = Box(
             low=low, high=high, dtype=self.observation_space.dtype
