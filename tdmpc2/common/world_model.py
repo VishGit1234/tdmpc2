@@ -116,7 +116,7 @@ class WorldModel(nn.Module):
 			return torch.stack([self._encoder[self.cfg.obs](o) for o in obs])
 		return self._encoder[self.cfg.obs](obs)
 
-	def next(self, z, a, task):
+	def next(self, z, a, task, return_mean_std=False):
 		"""
 		Predicts the next latent state given the current latent state and action.
 		"""
@@ -124,7 +124,11 @@ class WorldModel(nn.Module):
 			z = self.task_emb(z, task)
 		z = torch.cat([z, a], dim=-1)
 		# return self._dynamics(z)
-		return self._stochastic_dynamics(z)
+		z_next, mean, std = self._stochastic_dynamics(z)
+		if return_mean_std:
+			return z_next, mean, std
+		else:
+			return z_next
 
 	def reward(self, z, a, task):
 		"""

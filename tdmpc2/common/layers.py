@@ -134,15 +134,14 @@ def mlp(in_dim, mlp_dims, out_dim, act=None, dropout=0.):
 	return nn.Sequential(*mlp)
 
 class GaussianSampler(torch.nn.Module):
-	@torch._dynamo.disable()
 	def forward(self, out):
 		"""Returns sample from normal dist from MLP"""
 		mean, log_variance = out.split(out.size(-1) // 2, dim=-1)
-		variance = torch.log(1 + torch.exp(log_variance))
+		std = F.softplus(log_variance) + 1e-6
 		with torch.no_grad():
 			epsilon = torch.randn_like(mean, device=torch.device('cuda:0'))
-		output = mean + epsilon * variance
-		return output
+		output = mean + epsilon * std
+		return output, mean, std
 
 def gaussian_mlp(in_dim, mlp_dims, out_dim, act=None, dropout=0.):
 	"""

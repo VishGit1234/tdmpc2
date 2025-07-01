@@ -61,12 +61,12 @@ vmin: -10
 vmax: +10
 
 # architecture
-model_size: 1 # preset config, below ignored
+model_size: ??? # preset config, below ignored
 num_enc_layers: 2
-enc_dim: 256
+enc_dim: 32
 num_channels: 32
-mlp_dim: 256
-latent_dim: 128
+mlp_dim: 32
+latent_dim: 24
 task_dim: 96
 num_q: 2
 dropout: 0.01
