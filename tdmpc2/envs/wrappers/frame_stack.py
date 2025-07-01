@@ -171,7 +171,7 @@ class FrameStack(gym.ObservationWrapper, gym.utils.RecordConstructorArgs):
             :class:`LazyFrames` object for the wrapper's frame buffer,  :attr:`self.frames`
         """
         assert len(self.frames) == self.num_stack, (len(self.frames), self.num_stack)
-        return LazyFrames(list(self.frames), self.lz4_compress)
+        return LazyFrames(list(self.frames), self.lz4_compress)[:]
 
     def step(self, action):
         """Steps through the environment, appending the observation to the frame buffer.
