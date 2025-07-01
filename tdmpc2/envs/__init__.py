@@ -5,6 +5,7 @@ import gymnasium as gym
 
 from envs.wrappers.multitask import MultitaskWrapper
 from envs.wrappers.tensor import TensorWrapper
+from envs.wrappers.frame_stack import FrameStack
 
 def missing_dependencies(task):
 	raise ValueError(f'Missing dependencies for task {task}; install dependencies to use this environment.')
@@ -100,7 +101,7 @@ def make_env(cfg):
 	)
 
 	env = ScaleAction(env, scale_factor=cfg.action_scale)  # Scale down the action space
-
+	env = FrameStack(env, num_stack=cfg.obs_buffer_size)
 	cfg.obs_shape = {cfg.get('obs', 'state'): (env.observation_space.shape[1], )}
 	cfg.action_dim = env.action_space.shape[1]
 	cfg.episode_length = 50 # manually set in KinovaPushCubeEnv
