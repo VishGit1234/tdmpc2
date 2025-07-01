@@ -85,8 +85,8 @@ class LazyFrames:
         """
         if isinstance(int_or_slice, int):
             return self._check_decompress(self._frames[int_or_slice])  # single frame
-        return torch.stack(
-            [self._check_decompress(f) for f in self._frames[int_or_slice]], axis=0
+        return torch.concatenate(
+            [self._check_decompress(f) for f in self._frames[int_or_slice]], dim=-1
         )
 
     def __eq__(self, other):
