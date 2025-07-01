@@ -43,7 +43,8 @@ class MultitaskWrapper(gym.Wrapper):
 
 	def _pad_obs(self, obs):
 		if obs.shape != self._obs_shape:
-			obs = torch.cat((obs, torch.zeros(self._obs_shape[0]-obs.shape[0], dtype=obs.dtype, device=obs.device)))
+			# Should have self.env defined if this is called.
+			obs = torch.cat((obs, torch.zeros(self._obs_shape[0]-obs.shape[0], dtype=obs.dtype, device=self.env.get_wrapper_attr('device'))))
 		return obs
 	
 	def reset(self, task_idx=-1):

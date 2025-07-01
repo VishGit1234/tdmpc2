@@ -31,7 +31,7 @@ class OnlineTrainer(Trainer):
 		for i in range(self.cfg.eval_episodes // self.cfg.num_envs):
 			obs, _ = self.env.reset()
 			done = torch.tensor(False)
-			ep_reward = torch.zeros(self.cfg.num_envs, device=obs.device)
+			ep_reward = torch.zeros(self.cfg.num_envs, device=self.env.get_wrapper_attr('device'))
 			t = 0
 			if self.cfg.save_video:
 				self.logger.video.init(self.env, enabled=(i==0))
