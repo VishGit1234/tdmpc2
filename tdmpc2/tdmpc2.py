@@ -121,20 +121,53 @@ class TDMPC2(torch.nn.Module):
 		return action
 
 	@torch.no_grad()
-	def _estimate_value(self, z, actions, task):
-		"""Estimate value of a trajectory starting at latent state z and executing given actions."""
-		G, discount = 0, 1
-		termination = torch.zeros(self.cfg.num_samples, 1, dtype=torch.float32, device=z.device)
-		for t in range(self.cfg.horizon):
-			reward = math.two_hot_inv(self.model.reward(z, actions[:, t], task), self.cfg)
-			z = self.model.next(z, actions[:, t], task)
-			G = G + discount * (1-termination) * reward
-			discount_update = self.discount[torch.tensor(task)] if self.cfg.multitask else self.discount
-			discount = discount * discount_update
-			if self.cfg.episodic:
-				termination = torch.clip(termination + (self.model.termination(z, task) > 0.5).float(), max=1.)
-		action, _ = self.model.pi(z, task)
-		return G + discount * (1-termination) * self.model.Q(z, action, task, return_type='avg')
+	def _estimate_value(self, z, actions, task, num_rollouts=10):
+		"""
+		Estimate the value of a trajectory starting at latent state z and 
+		executing given actions, averaged over multiple stochastic rollouts (if stochastic mode).
+
+		Args:
+			z: Initial latent state.
+			actions: Sequence of actions.
+			task: Task index or descriptor.
+			num_rollouts: Number of rollouts to simulate.
+		
+		Returns:
+			Averaged value estimate across rollouts (if stochastic mode).
+		"""
+		total_value = 0
+
+		if self.cfg.use_stochastic_dynamics:
+			# Expand z for batched rollouts
+			z_rollout = z.unsqueeze(0).expand(num_rollouts, *z.shape)
+			G = torch.zeros((num_rollouts, z.shape[0], z.shape[1], 1), device=z.device)
+			discount = torch.ones((num_rollouts, 1, 1, 1), device=z.device) 
+			for t in range(self.cfg.horizon):
+				# Expand action for batched rollouts
+				action = actions.select(-3, t).unsqueeze(0).expand(num_rollouts, -1, -1, -1)
+				reward = math.two_hot_inv(self.model.reward(z_rollout, action, task), self.cfg)
+				z_rollout = self.model.next(z_rollout, action, task)
+				G += discount * reward
+				discount_update = self.discount[torch.tensor(task)] if self.cfg.multitask else self.discount
+				discount *= discount_update
+			# Terminal Q-value
+			terminal_value = discount * self.model.Q(z_rollout, self.model.pi(z_rollout, task)[0], task, return_type='avg')
+			total_value = G + terminal_value
+			# Average over rollouts
+			return total_value.mean(dim=0).clone()
+		else:
+			G, discount = 0, 1
+			termination = torch.zeros(self.cfg.num_samples, 1, dtype=torch.float32, device=z.device)
+			for t in range(self.cfg.horizon):
+				reward = math.two_hot_inv(self.model.reward(z, actions[:, t], task), self.cfg)
+				z = self.model.next(z, actions[:, t], task)
+				G = G + discount * (1-termination) * reward
+				discount_update = self.discount[torch.tensor(task)] if self.cfg.multitask else self.discount
+				discount = discount * discount_update
+				if self.cfg.episodic:
+					termination = torch.clip(termination + (self.model.termination(z, task) > 0.5).float(), max=1.)
+			action, _ = self.model.pi(z, task)
+			return G + discount * (1-termination) * self.model.Q(z, action, task, return_type='avg')
 
 	@torch.no_grad()
 	def _plan(self, obs, t0=False, eval_mode=False, task=None):
@@ -154,14 +187,14 @@ class TDMPC2(torch.nn.Module):
 		z = self.model.encode(obs, task)
 		if self.cfg.num_pi_trajs > 0:
 			pi_actions = torch.empty(self.cfg.num_envs, self.cfg.horizon, self.cfg.num_pi_trajs, self.cfg.action_dim, device=self.device)
-			_z = z.unsqueeze(1).repeat(1, self.cfg.num_pi_trajs, 1)
+			_z = z.unsqueeze(1).expand(-1, self.cfg.num_pi_trajs, -1)
 			for t in range(self.cfg.horizon-1):
 				pi_actions[:, t], _ = self.model.pi(_z, task)
 				_z = self.model.next(_z, pi_actions[:,t], task)
 			pi_actions[:,-1], _ = self.model.pi(_z, task)
 
 		# Initialize state and parameters
-		z = z.unsqueeze(1).repeat(1, self.cfg.num_samples, 1)
+		z = z.unsqueeze(1).expand(-1, self.cfg.num_samples, -1)
 		mean = torch.zeros(self.cfg.num_envs, self.cfg.horizon, self.cfg.action_dim, device=self.device)
 		std = self.cfg.max_std*torch.ones(self.cfg.num_envs, self.cfg.horizon, self.cfg.action_dim, device=self.device)
 		if not t0:
@@ -273,8 +306,12 @@ class TDMPC2(torch.nn.Module):
 		zs[0] = z
 		consistency_loss = 0
 		for t, (_action, _next_z) in enumerate(zip(action.unbind(0), next_z.unbind(0))):
-			z = self.model.next(z, _action, task)
-			consistency_loss = consistency_loss + F.mse_loss(z, _next_z) * self.cfg.rho**t
+			if self.cfg.use_stochastic_dynamics:
+				z, mean, std = self.model.next(z, _action, task, return_mean_std=True)
+				consistency_loss = consistency_loss + F.gaussian_nll_loss(mean, _next_z, std**2) * self.cfg.rho**t
+			else:
+				z = self.model.next(z, _action, task)
+				consistency_loss = consistency_loss + F.mse_loss(z, _next_z) * self.cfg.rho**t
 			zs[t+1] = z
 
 		# Predictions
