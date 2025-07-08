@@ -2,6 +2,7 @@ from copy import deepcopy
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from common import layers, math, init
 from tensordict import TensorDict
@@ -24,7 +25,7 @@ class WorldModel(nn.Module):
 				self._action_masks[i, :cfg.action_dims[i]] = 1.
 		self._encoder = layers.enc(cfg)
 		if cfg.use_stochastic_dynamics:
-			self._dynamics = layers.gaussian_mlp(cfg.latent_dim + cfg.action_dim + cfg.task_dim, 2*[cfg.mlp_dim], 2*cfg.latent_dim, act=layers.SimNorm(cfg))
+			self._dynamics = layers.mlp(cfg.latent_dim + cfg.action_dim + cfg.task_dim, 2*[cfg.mlp_dim], 2*cfg.latent_dim, act=layers.SimNorm(cfg))
 		else:
 			self._dynamics = layers.mlp(cfg.latent_dim + cfg.action_dim + cfg.task_dim, 2*[cfg.mlp_dim], cfg.latent_dim, act=layers.SimNorm(cfg))
 		self._reward = layers.mlp(cfg.latent_dim + cfg.action_dim + cfg.task_dim, 2*[cfg.mlp_dim], max(cfg.num_bins, 1))
@@ -114,7 +115,7 @@ class WorldModel(nn.Module):
 			return torch.stack([self._encoder[self.cfg.obs](o) for o in obs])
 		return self._encoder[self.cfg.obs](obs)
 
-	def next(self, z, a, task, return_mean_std=False):
+	def next(self, z, a, task, return_info=False):
 		"""
 		Predicts the next latent state given the current latent state and action.
 		"""
@@ -122,13 +123,21 @@ class WorldModel(nn.Module):
 			z = self.task_emb(z, task)
 		z = torch.cat([z, a], dim=-1)
 		if self.cfg.use_stochastic_dynamics:
-			z_next, mean, std = self._dynamics(z)
-			if return_mean_std:
-				return z_next, mean, std
+			mean, std_param = self._dynamics(z).chunk(2, dim=-1)
+			std = F.softplus(std_param) + 1e-6  # Ensure std is positive
+			z_next = mean + torch.randn_like(mean) * std
+			# print("z_std", std[0].mean().item(), std[0].std().item(), "z_mean", mean[0].mean().item(), mean[0].std().item(), "z_next", z_next[0].mean().item(), z_next[0].std().item())
+			if return_info:
+				info = {
+					"mean": mean,
+					"std": std,
+				}
+				return z_next, info
 			else:
 				return z_next
 		else:
-			return self._dynamics(z)
+			z_next = self._dynamics(z)
+			return z_next
 
 	def reward(self, z, a, task):
 		"""

@@ -98,7 +98,7 @@ class OnlineTrainer(Trainer):
 						'Set `episodic=true` to enable support for terminations.')
 					train_metrics.update(
 						episode_reward=torch.cat([td['reward'] for td in self._tds[1:]]).sum(0).mean(),
-						episode_success=info['_success'].float().nanmean(),
+						episode_success=100*info['_success'].float().nanmean(),
 						episode_length=len(self._tds),
 						episode_terminated=info['terminated'])
 					train_metrics.update(self.common_metrics())

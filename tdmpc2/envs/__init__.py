@@ -90,6 +90,7 @@ def make_env(cfg):
 		"block_gen_range": cfg.box_gen_range,
 		"target_offset": cfg.target_pos,
 		"goal_radius": cfg.termination_if_cube_goal_dist_less_than,
+		"cube_half_sizes": cfg.cube_half_sizes,
 	}
 
 	env = gym.make(

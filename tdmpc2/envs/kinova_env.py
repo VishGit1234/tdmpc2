@@ -10,7 +10,9 @@ from mani_skill.agents.controllers.base_controller import ControllerConfig
 from mani_skill.agents.registration import register_agent
 from mani_skill.utils import common, sapien_utils
 from mani_skill.utils.structs.actor import Actor
+from mani_skill.utils.building import actors
 from mani_skill.sensors.camera import CameraConfig
+from mani_skill.utils.scene_builder.table import TableSceneBuilder
 
 from mani_skill.utils.registration import register_env
 from mani_skill.envs.tasks.tabletop.push_cube import PushCubeEnv
@@ -253,12 +255,52 @@ class KinovaPushCubeEnv(PushCubeEnv):
     self.block_gen_range = kwargs["block_gen_range"]
     self.target_offset = kwargs["target_offset"]
     self.goal_radius = kwargs["goal_radius"]
+    self.cube_half_sizes = kwargs["cube_half_sizes"]
     
     del kwargs["block_offset"]
     del kwargs["block_gen_range"]
     del kwargs["target_offset"]
     del kwargs["goal_radius"]
+    del kwargs["cube_half_sizes"]
     super().__init__(*args, robot_uids=robot_uids, **kwargs)
+
+  def _load_scene(self, options: dict):
+    # we use a prebuilt scene builder class that automatically loads in a floor and table.
+    self.table_scene = TableSceneBuilder(
+        env=self, robot_init_qpos_noise=self.robot_init_qpos_noise
+    )
+    self.table_scene.build()
+
+    # we then add the cube that we want to push and give it a color and size using a convenience build_cube function
+    # we specify the body_type to be "dynamic" as it should be able to move when touched by other objects / the robot
+    # finally we specify an initial pose for the cube so that it doesn't collide with other objects initially
+    self.obj = actors.build_box(
+        self.scene,
+        half_sizes=self.cube_half_sizes,
+        color=np.array([12, 42, 160, 255]) / 255,
+        name="cube",
+        body_type="dynamic",
+        initial_pose=sapien.Pose(p=[0, 0, self.cube_half_sizes[2]]),
+    )
+
+    # we also add in red/white target to visualize where we want the cube to be pushed to
+    # we specify add_collisions=False as we only use this as a visual for videos and do not want it to affect the actual physics
+    # we finally specify the body_type to be "kinematic" so that the object stays in place
+    self.goal_region = actors.build_red_white_target(
+        self.scene,
+        radius=self.goal_radius,
+        thickness=1e-5,
+        name="goal_region",
+        add_collision=False,
+        body_type="kinematic",
+        initial_pose=sapien.Pose(p=[0, 0, 1e-3]),
+    )
+
+    # optionally you can automatically hide some Actors from view by appending to the self._hidden_objects list. When visual observations
+    # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
+    # This is useful if you intend to add some visual goal sites as e.g. done in PickCube that aren't actually part of the task
+    # and are there just for generating evaluation videos.
+    # self._hidden_objects.append(self.goal_region)
 
   @property
   def _default_human_render_camera_configs(self):
@@ -320,13 +362,13 @@ class KinovaPushCubeEnv(PushCubeEnv):
     # some useful observation info for solving the task includes the pose of the tcp (tool center point) which is the point between the
     # grippers of the robot
     obs = dict(
-        tcp_pose=self.agent.tcp.pose.raw_pose,
+        tcp_pose=self.agent.tcp.pose.p[:, :2],
     )
     if self.obs_mode_struct.use_state:
       # if the observation mode requests to use state, we provide ground truth information about where the cube is.
       # for visual observation modes one should rely on the sensed visual data to determine where the cube is
       obs.update(
-          goal_pos=self.goal_region.pose.p,
+          goal_pos=self.goal_region.pose.p[:, :2],
           obj_pose=self.obj.pose.raw_pose,
       )
     return obs

@@ -72,24 +72,26 @@ def evaluate(cfg: dict):
 		if not cfg.multitask:
 			task_idx = None
 		ep_rewards, ep_successes = [], []
-		for i in range(cfg.eval_episodes):
-			obs, done, ep_reward, t = env.reset(task_idx=task_idx), False, 0, 0
+		for i in range(cfg.eval_episodes // cfg.num_envs):
+			obs, _ = env.reset()
+			done, ep_reward, t = torch.tensor([False]), 0, 0
 			if cfg.save_video:
 				frames = [env.render()]
-			while not done:
+			while not torch.any(done):
 				action = agent.act(obs, t0=t==0, task=task_idx)
-				obs, reward, done, info = env.step(action)
+				obs, reward, terminated, truncated, info = env.step(action)
+				done = terminated | truncated
 				ep_reward += reward
 				t += 1
 				if cfg.save_video:
 					frames.append(env.render())
 			ep_rewards.append(ep_reward)
-			ep_successes.append(info['success'])
+			ep_successes.append(info['_success'])
 			if cfg.save_video:
 				imageio.mimsave(
 					os.path.join(video_dir, f'{task}-{i}.mp4'), frames, fps=15)
-		ep_rewards = np.mean(ep_rewards)
-		ep_successes = np.mean(ep_successes)
+		ep_rewards = torch.cat(ep_rewards).mean().cpu()
+		ep_successes = 100*torch.cat(ep_successes).float().mean().cpu()
 		if cfg.multitask:
 			scores.append(ep_successes*100 if task.startswith('mw-') else ep_rewards/10)
 		print(colored(f'  {task:<22}' \
