@@ -188,5 +188,8 @@ class KinovaPushCubeEnv(PushCubeEnv):
     return reward
 
   def render(self):
-    # Return the rendered image from the first environment in the batch
-    return super().render()[0].cpu().numpy()
+    if self.render_mode == "rgb_array":
+      # Return the rendered image from the first environment in the batch
+      return super().render()[0].cpu().numpy()
+    else:
+      return super().render()
