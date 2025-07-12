@@ -12,6 +12,8 @@ dependencies:
   - pytorch=2.6.0.dev20241112
   - pytorch-cuda=12.4
   - torchvision=0.15.2
+  - packaging
+  - exceptiongroup
   - pip:
     - gymnasium==0.29.1
     - ffmpeg==1.4

@@ -1,6 +1,6 @@
-from envs.kinova_env import KinovaPushCubeEnv
+from envs.kinova_envs import KinovaPushCubeEnv
 from envs.wrappers.frame_stack import FrameStack
-from envs import ScaleAction
+from envs.kinova_envs import ScaleAction
 import gymnasium as gym
 import torch
 import time

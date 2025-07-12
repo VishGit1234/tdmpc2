@@ -10,28 +10,7 @@ from envs.wrappers.frame_stack import FrameStack
 def missing_dependencies(task):
 	raise ValueError(f'Missing dependencies for task {task}; install dependencies to use this environment.')
 
-try:
-	from envs.dmcontrol import make_env as make_dm_control_env
-except:
-	make_dm_control_env = missing_dependencies
-try:
-	from envs.maniskill import make_env as make_maniskill_env
-except:
-	make_maniskill_env = missing_dependencies
-try:
-	from envs.metaworld import make_env as make_metaworld_env
-except:
-	make_metaworld_env = missing_dependencies
-try:
-	from envs.myosuite import make_env as make_myosuite_env
-except:
-	make_myosuite_env = missing_dependencies
-try:
-	from envs.mujoco import make_env as make_mujoco_env
-except:
-	make_mujoco_env = missing_dependencies
-
-from envs.kinova_env import KinovaPushCubeEnv
+from envs.kinova_env import make_env as make_kinova_env
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
@@ -56,52 +35,11 @@ def make_multitask_env(cfg):
 	cfg.episode_lengths = env._episode_lengths
 	return env
 
-import torch
-class ScaleAction(gym.ActionWrapper):  
-	def __init__(self, env, scale_factor=1, x_limits=[-0.4, 0.1], y_limits=[-0.6, 0.6]):
-		super().__init__(env)
-		self.scale_factor = scale_factor
-		self.x_limits = x_limits
-		self.y_limits = y_limits
-		self.action_space = gym.spaces.Box(
-			low=-1.0,
-			high=1.0,
-			# only x and y are allowed to move, the gripper is fixed
-			shape=(self.env.action_space.shape[0],2),
-			dtype=self.env.action_space.dtype
-		)
-
-	def action(self, action):
-		x = self.env.agent.tcp_pos[:, 0]
-		action[:, 0] = torch.where(torch.logical_and(self.x_limits[0] < x, x < self.x_limits[1]), action[:, 0], 0)
-		y = self.env.agent.tcp_pos[:, 1]
-		action[:, 1] = torch.where(torch.logical_and(self.y_limits[0] < y, y < self.y_limits[1]), action[:, 1], 0)
-		# Add additional 5 dims for the other part of the action spaces
-		action = torch.cat([action, torch.zeros(action.shape[0], 5, device=action.device)], dim=1)
-		return action*self.scale_factor
-
 def make_env(cfg):
 	"""
 	Make kinova environment for TD-MPC2 experiments.
 	"""
-	# Init kwargs dict
-	kwargs = {
-		"block_offset": cfg.init_box_pos,
-		"block_gen_range": cfg.box_gen_range,
-		"target_offset": cfg.target_pos,
-		"goal_radius": cfg.termination_if_cube_goal_dist_less_than,
-		"cube_half_sizes": cfg.cube_half_sizes,
-	}
-
-	env = gym.make(
-		"KinovaPushCube",
-		num_envs=cfg.num_envs,
-		render_mode="rgb_array",
-		control_mode="pd_ee_delta_pose",
-		**kwargs
-	)
-
-	env = ScaleAction(env, scale_factor=cfg.action_scale)  # Scale down the action space
+	env = make_kinova_env(cfg)
 	env = FrameStack(env, num_stack=cfg.obs_buffer_size)
 	cfg.obs_shape = {cfg.get('obs', 'state'): (env.observation_space.shape[1], )}
 	cfg.action_dim = env.action_space.shape[1]

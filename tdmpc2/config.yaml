@@ -2,7 +2,7 @@ defaults:
     - override hydra/launcher: submitit_local
 
 # environment
-task: kinova_sweep
+task: kinova_push_cube
 obs: state
 episodic: false
 num_envs: 64
@@ -63,7 +63,7 @@ vmin: -10
 vmax: +10
 
 # architecture
-use_stochastic_dynamics: true
+use_stochastic_dynamics: false
 model_size: ??? # preset config, below ignored
 num_enc_layers: 2
 enc_dim: 48
