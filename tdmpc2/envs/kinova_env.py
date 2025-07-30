@@ -26,5 +26,5 @@ def make_env(cfg):
     control_mode="pd_ee_delta_pose",
     **kwargs
   )
-  env = ScaleAction(env, scale_factor=cfg.action_scale, gripper_control=False)  # Scale down the action space
+  env = ScaleAction(env, scale_factor=cfg.action_scale)  # Scale down the action space
   return env
