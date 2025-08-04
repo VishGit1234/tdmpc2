@@ -23,6 +23,6 @@ class ScaleAction(gym.ActionWrapper):
 		action[:, 1] = torch.where(torch.logical_and(self.y_limits[0] < y, y < self.y_limits[1]), action[:, 1], 0)
 		z = self.env.unwrapped.agent.tcp_pos[:, 2]
 		action[:, 2] = torch.where(torch.logical_and(self.z_limits[0] < z, z < self.z_limits[1]), action[:, 2], 0)
-		if self.gripper_control:
+		if not self.gripper_control:
 			action[:, 3:] = 0
 		return action*self.scale_factor

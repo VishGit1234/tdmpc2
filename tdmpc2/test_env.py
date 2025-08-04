@@ -1,10 +1,13 @@
 from envs.kinova_envs.KinovaPushCubeEnv import KinovaPushCubeEnv
 from envs.wrappers.frame_stack import FrameStack
+from envs.wrappers.gaussian_noise import GaussianObsNoise
+from envs.wrappers.repeat_action import RepeatAction
 from envs.kinova_envs.ScaleAction import ScaleAction
 import gymnasium as gym
 import torch
 import time
 import numpy as np
+from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 
 # Init kwargs dict
 kwargs = {
@@ -22,32 +25,14 @@ kwargs = {
 }
 # render_mode = "human"
 render_mode = "rgb_array"
-num_envs = 128 if render_mode != "human" else 1
-env = ScaleAction(gym.make("KinovaPushCube", num_envs=num_envs, control_mode="pd_ee_delta_pose", render_mode=render_mode, **kwargs), scale_factor=0.2)
+num_envs = 2 if render_mode != "human" else 1
+env = gym.make("KinovaPushCube", num_envs=num_envs, control_mode="pd_ee_delta_pose", render_mode=render_mode, **kwargs)
+env = GaussianObsNoise(env, std=0.01)  # Add Gaussian noise to observations
+env = FrameStack(env, num_stack=10)
+env = ScaleAction(env, scale_factor=0.1)  # Scale down the action space
+env = RepeatAction(env, repeat=10)  # Repeat actions
 env.unwrapped.print_sim_details()
-env = FrameStack(env, 3) 
-obs, _ = env.reset(seed=0)
-done = False
-start_time = time.time()
-total_rew = 0
-frames = []
-while not done or render_mode == "human":
-    # note that env.action_space is now a batched action space
-    if num_envs == 1:
-        obs, rew, terminated, truncated, info = env.step(torch.from_numpy(env.action_space.sample()).to(device=env.get_wrapper_attr('device')).unsqueeze(0))
-    else:
-        obs, rew, terminated, truncated, info = env.step(torch.from_numpy(env.action_space.sample()).to(device=env.get_wrapper_attr('device')))
-    done = (terminated | truncated).any() # stop if any environment terminates/truncates
-    if render_mode == "human":
-        env.render()
-N = num_envs * info["elapsed_steps"][0].item()
-dt = time.time() - start_time
-FPS = N / (dt)
-print(f"Frames Per Second = {N} / {dt} = {FPS}")
-
-print("Now with rendering...")
-
-from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
+env.is_rendered = True  # Enable rendering in RepeatAction wrapper
 obs, _ = env.reset(seed=0)
 done = False
 start_time = time.time()
@@ -55,9 +40,14 @@ total_rew = 0
 frames = []
 while not done:
     # note that env.action_space is now a batched action space
-    obs, rew, terminated, truncated, info = env.step(torch.from_numpy(env.action_space.sample()).to(device=env.get_wrapper_attr('device')))
+    if num_envs == 1:
+        action = torch.tensor([[0.0, 1.0, 0.0, 0, 0, 0, 0]], device=env.get_wrapper_attr('device'))
+        obs, rew, terminated, truncated, info = env.step(action)
+    else:
+        action = torch.tensor([[0.0, 1.0, 0.0, 0, 0, 0, 0]] * num_envs, device=env.get_wrapper_attr('device'))
+        obs, rew, terminated, truncated, info = env.step(action)
     frame = env.render()
-    frames.append(frame)
+    frames.extend(frame)
     done = (terminated | truncated).any() # stop if any environment terminates/truncates
 N = num_envs * info["elapsed_steps"][0].item()
 dt = time.time() - start_time

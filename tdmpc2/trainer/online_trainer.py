@@ -27,6 +27,8 @@ class OnlineTrainer(Trainer):
 
 	def eval(self):
 		"""Evaluate a TD-MPC2 agent."""
+		if hasattr(self.env, 'is_rendered'):
+			self.env.is_rendered = True
 		ep_rewards, ep_successes, ep_lengths = [], [], []
 		for i in range(self.cfg.eval_episodes // self.cfg.num_envs):
 			obs, _ = self.env.reset()
@@ -50,11 +52,14 @@ class OnlineTrainer(Trainer):
 			ep_lengths.append(t)
 			if self.cfg.save_video:
 				self.logger.video.save(self._step)
+		if hasattr(self.env, 'is_rendered'):
+			self.env.is_rendered = False
 		return dict(
 			episode_reward=torch.cat(ep_rewards).mean().cpu(),
 			episode_success=100*torch.cat(ep_successes).float().mean().cpu(),
 			episode_length=np.nanmean(ep_lengths),
 		)
+	
 	def to_td(self, obs, action=None, reward=None, terminated=None):
 		"""Creates a TensorDict for a new episode."""
 		if isinstance(obs, dict):
