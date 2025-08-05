@@ -52,6 +52,8 @@ def evaluate(cfg: dict):
 
 	# Make environment
 	env = make_env(cfg)
+	if hasattr(env, 'is_rendered'):
+		env.is_rendered = True
 
 	# Load agent
 	agent = TDMPC2(cfg)
@@ -76,7 +78,11 @@ def evaluate(cfg: dict):
 			obs, _ = env.reset()
 			done, ep_reward, t = torch.tensor([False]), 0, 0
 			if cfg.save_video:
-				frames = [env.render()]
+				_frames = env.render()
+				if isinstance(_frames, list):
+					frames = _frames
+				else:
+					frames = [_frames]
 			while not torch.any(done):
 				action = agent.act(obs, t0=t==0, task=task_idx)
 				obs, reward, terminated, truncated, info = env.step(action)
@@ -84,7 +90,11 @@ def evaluate(cfg: dict):
 				ep_reward += reward
 				t += 1
 				if cfg.save_video:
-					frames.append(env.render())
+					_frames = env.render()
+					if isinstance(_frames, list):
+						frames.extend(_frames)
+					else:
+						frames.append(_frames)
 			ep_rewards.append(ep_reward)
 			ep_successes.append(info['_success'])
 			if cfg.save_video:

@@ -6,6 +6,9 @@ import gymnasium as gym
 from envs.wrappers.multitask import MultitaskWrapper
 from envs.wrappers.tensor import TensorWrapper
 from envs.wrappers.frame_stack import FrameStack
+from envs.wrappers.gaussian_noise import GaussianObsNoise
+from envs.kinova_envs.ScaleAction import ScaleAction
+from envs.wrappers.repeat_action import RepeatAction
 
 def missing_dependencies(task):
 	raise ValueError(f'Missing dependencies for task {task}; install dependencies to use this environment.')
@@ -40,10 +43,12 @@ def make_env(cfg):
 	Make kinova environment for TD-MPC2 experiments.
 	"""
 	env = make_kinova_env(cfg)
+	env = GaussianObsNoise(env, std=cfg.obs_noise_std)  # Add Gaussian noise to observations
 	env = FrameStack(env, num_stack=cfg.obs_buffer_size)
+	env = ScaleAction(env, scale_factor=cfg.action_scale)  # Scale down the action space
+	env = RepeatAction(env, repeat=10)  # Repeat actions
 	cfg.obs_shape = {cfg.get('obs', 'state'): (env.observation_space.shape[1], )}
 	cfg.action_dim = env.action_space.shape[1]
-	cfg.episode_length = 50 # manually set in KinovaPushCubeEnv
 	cfg.seed_steps = max(1000, 5*cfg.episode_length) * cfg.num_envs
 	return env
 

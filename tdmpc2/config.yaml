@@ -11,13 +11,15 @@ init_box_pos: [-0.3, 0.2]
 box_gen_range: [0.1, 0.1]
 termination_if_cube_goal_dist_less_than: 0.05
 target_pos: [0., 0.2]
-action_scale: 0.5
+episode_length: 200 # manually set in KinovaPushCubeEnv
+action_scale: 0.1
+obs_noise_std: 0.01
 cube_randomization_ranges:
-    size: [[0.04, 0.04, 0.04], [0.07, 0.07, 0.07]]
-    dynamic_friction: [0.1, 0.3]
-    static_friction: [0.1, 0.3]
+    size: [[0.04, 0.04, 0.04], [0.05, 0.05, 0.05]]
+    dynamic_friction: [0.3, 0.4]
+    static_friction: [0.3, 0.4]
     restitution: [0.1, 0.3]
-    mass: [0.1, 1.0]
+    mass: [0.1, 0.8]
 
 # evaluation
 checkpoint: ???
@@ -99,7 +101,6 @@ multitask: ???
 tasks: ???
 obs_shape: ???
 action_dim: ???
-episode_length: ???
 obs_shapes: ???
 action_dims: ???
 episode_lengths: ???
