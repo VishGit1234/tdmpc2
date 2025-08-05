@@ -4,14 +4,19 @@ import numpy as np
 import sapien
 import torch
 
+from sapien.physx import PhysxRigidBodyComponent, PhysxRigidBaseComponent
+
 from mani_skill.utils import sapien_utils
 from mani_skill.utils.building import actors
 from mani_skill.sensors.camera import CameraConfig
 from mani_skill.envs.tasks.tabletop.pick_cube import PickCubeEnv
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
+from mani_skill.utils.structs.actor import Actor
 
+from mani_skill.utils.registration import register_env
 from mani_skill.utils.structs import Pose
 from transforms3d.euler import euler2quat
+from mani_skill.utils.structs.types import Array
 
 @register_env("KinovaPickCube", max_episode_steps=50)
 class KinovaPickCubeEnv(PickCubeEnv):
@@ -23,7 +28,13 @@ class KinovaPickCubeEnv(PickCubeEnv):
         self.block_gen_range = kwargs["block_gen_range"]
         self.target_offset = kwargs["target_offset"]
         self.goal_radius = kwargs["goal_radius"]
-        self.cube_half_sizes = kwargs["cube_half_sizes"]
+
+        self.cube_rand_ranges = kwargs["cube_randomization_ranges"]
+        self.cube_size_range = self.cube_rand_ranges["size"]
+        self.dynamic_friction_range = self.cube_rand_ranges["dynamic_friction"]
+        self.static_friction_range = self.cube_rand_ranges["static_friction"]
+        self.restitution_range = self.cube_rand_ranges["restitution"]
+        self.mass_range = self.cube_rand_ranges["mass"]
         
         del kwargs["block_offset"]
         del kwargs["block_gen_range"]
@@ -53,14 +64,53 @@ class KinovaPickCubeEnv(PickCubeEnv):
         # we then add the cube that we want to pick and give it a color and size using a convenience build_cube function
         # we specify the body_type to be "dynamic" as it should be able to move when touched by other objects / the robot
         # finally we specify an initial pose for the cube so that it doesn't collide with other objects initially
-        self.obj = actors.build_box(
-            self.scene,
-            half_sizes=self.cube_half_sizes,
-            color=np.array([12, 42, 160, 255]) / 255,
-            name="cube",
-            body_type="dynamic",
-            initial_pose=sapien.Pose(p=[0, 0, self.cube_half_sizes[2]]),
-        )
+        max_size, min_size = self.cube_size_range
+        max_size = torch.tensor(max_size)
+        min_size = torch.tensor(min_size)
+        objects = []
+        cube_size = torch.rand(3) * (max_size - min_size) + min_size
+        cube_half_sizes = cube_size/2
+        for i in range(self.num_envs):
+            builder = self.scene.create_actor_builder()
+            # ignore the randomization in height
+            cube_half_sizes[2] = self.cube_half_size
+            builder.add_box_collision(half_size=cube_half_sizes)
+            builder.set_scene_idxs([i])
+            builder.add_box_visual(
+                half_size=cube_half_sizes,
+                material=sapien.render.RenderMaterial(
+                    base_color=np.array([12, 42, 160, 255]) / 255
+                )
+            )
+            builder.set_initial_pose(sapien.Pose(p=[0, 0, cube_half_sizes[2]]))
+            obj = builder.build(name = f"object_{i}")
+            self.remove_from_state_dict_registry(obj)
+            objects.append(obj)
+        self.obj = Actor.merge(objects, name = "cube")
+        self.add_to_state_dict_registry(self.obj)
+
+         # Randomize object physical and collision properties
+        for i, obj in enumerate(self.obj._objs):
+            # modify the i-th object which is in parallel environment i
+
+            # modifying physical properties e.g. randomizing mass from 0.1 to 1kg
+            rigid_body_component: PhysxRigidBodyComponent = obj.find_component_by_type(PhysxRigidBodyComponent)
+            if rigid_body_component is not None:
+                # note the use of _batched_episode_rng instead of torch.rand. _batched_episode_rng helps ensure reproducibility in parallel environments.
+                min_mass, max_mass = self.mass_range
+                rigid_body_component.mass = torch.rand(1).item() * (max_mass - min_mass) + min_mass
+
+            # modifying per collision shape properties such as friction values
+            rigid_base_component: PhysxRigidBaseComponent = obj.find_component_by_type(PhysxRigidBaseComponent)
+            for shape in rigid_base_component.collision_shapes:
+                min_dyn_fric, max_dyn_fric = self.dynamic_friction_range
+                shape.physical_material.dynamic_friction = torch.rand(1).item() * (max_dyn_fric - min_dyn_fric) + min_dyn_fric
+
+                min_static_fric, max_static_fric = self.static_friction_range
+                shape.physical_material.static_friction = torch.rand(1).item() * (max_static_fric - min_static_fric) + min_static_fric
+
+                min_restitution, max_restitution = self.restitution_range
+                shape.physical_material.restitution = torch.rand(1).item() * (max_restitution - min_restitution) + min_restitution
 
         # we also add in red/white sphere target to visualize where we want the cube to be picked to
         # we specify add_collisions=False as we only use this as a visual for videos and do not want it to affect the actual physics
