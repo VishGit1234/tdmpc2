@@ -40,7 +40,6 @@ class KinovaPickCubeEnv(PickCubeEnv):
         del kwargs["block_gen_range"]
         del kwargs["target_offset"]
         del kwargs["goal_radius"]
-        del kwargs["cube_half_sizes"]
         super().__init__(*args, robot_uids=robot_uids, **kwargs)
 
     @property
