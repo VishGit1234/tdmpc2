@@ -9,10 +9,12 @@ class ScaleAction(gym.ActionWrapper):
 		self.y_limits = y_limits
 		self.z_limits = z_limits
 		self.gripper_control = gripper_control
+		shape = list(self.env.action_space.shape)
+		shape[-1] = 4
 		self.action_space = gym.spaces.Box(
 			low=-1.0,
 			high=1.0,
-			shape=self.env.action_space.shape,
+			shape=tuple(shape),
 			dtype=self.env.action_space.dtype
 		)
 
@@ -24,5 +26,7 @@ class ScaleAction(gym.ActionWrapper):
 		z = self.env.unwrapped.agent.tcp_pos[:, 2]
 		action[:, 2] = torch.where(torch.logical_and(self.z_limits[0] < z, z < self.z_limits[1]), action[:, 2], 0)
 		if not self.gripper_control:
-			action[:, 3:] = 0
-		return action*self.scale_factor
+			action[:, 3] = 0
+		# Set ee rotation controls to zero
+		action = torch.cat([action[:, :3], torch.zeros(action.shape[0], 3, device=action.device, dtype=action.dtype), action[:, 3:]], dim=1)
+		return action * self.scale_factor

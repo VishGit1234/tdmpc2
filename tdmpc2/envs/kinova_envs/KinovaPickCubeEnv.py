@@ -9,16 +9,16 @@ from sapien.physx import PhysxRigidBodyComponent, PhysxRigidBaseComponent
 from mani_skill.utils import sapien_utils
 from mani_skill.utils.building import actors
 from mani_skill.sensors.camera import CameraConfig
-from mani_skill.envs.tasks.tabletop.pick_cube import PickCubeEnv
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs.actor import Actor
 
 from mani_skill.utils.registration import register_env
+from mani_skill.envs.tasks.tabletop.pick_cube import PickCubeEnv
 from mani_skill.utils.structs import Pose
 from transforms3d.euler import euler2quat
 from mani_skill.utils.structs.types import Array
 
-@register_env("KinovaPickCube", max_episode_steps=50)
+@register_env("KinovaPickCube", max_episode_steps=200)
 class KinovaPickCubeEnv(PickCubeEnv):
     SUPPORTED_ROBOTS = [
         "kinova_gen3",
@@ -35,7 +35,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
         self.static_friction_range = self.cube_rand_ranges["static_friction"]
         self.restitution_range = self.cube_rand_ranges["restitution"]
         self.mass_range = self.cube_rand_ranges["mass"]
-        
+
         del kwargs["block_offset"]
         del kwargs["block_gen_range"]
         del kwargs["target_offset"]
@@ -46,13 +46,10 @@ class KinovaPickCubeEnv(PickCubeEnv):
     @property
     def _default_human_render_camera_configs(self):
       # registers a more high-definition (512x512) camera used just for rendering when render_mode="rgb_array" or calling env.render_rgb_array()
-      pose = sapien_utils.look_at([-0.1, 1.7, 1.2], [-0.1, 0.8, 0.35])
+      pose = sapien_utils.look_at([0.6, 1.0, 0.6], [0.0, 0.3, 0.35])
       return CameraConfig(
           "render_camera", pose=pose, width=512, height=512, fov=1, near=0.01, far=100
       )
-
-    # def _load_agent(self, options: dict):
-    #     super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))
 
     def _load_scene(self, options: dict):
         # we use a prebuilt scene builder class that automatically loads in a floor and table.
@@ -72,8 +69,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
         cube_half_sizes = cube_size/2
         for i in range(self.num_envs):
             builder = self.scene.create_actor_builder()
-            # ignore the randomization in height
-            cube_half_sizes[2] = self.cube_half_size
+            cube_size = torch.rand(3) * (max_size - min_size) + min_size
             builder.add_box_collision(half_size=cube_half_sizes)
             builder.set_scene_idxs([i])
             builder.add_box_visual(
@@ -89,7 +85,28 @@ class KinovaPickCubeEnv(PickCubeEnv):
         self.cube = Actor.merge(objects, name = "cube")
         self.add_to_state_dict_registry(self.cube)
 
-         # Randomize object physical and collision properties
+        # we also add in green sphere target to visualize where we want the cube to be lifted to
+        # we specify add_collisions=False as we only use this as a visual for videos and do not want it to affect the actual physics
+        # we finally specify the body_type to be "kinematic" so that the object stays in place
+        # goal_thresh = goal_radius
+
+        self.goal_site = actors.build_sphere(
+            self.scene,
+            radius=self.goal_radius,
+            color=[0, 1, 0, 1],
+            name="goal_site",
+            body_type="kinematic",
+            add_collision=False,
+            initial_pose=sapien.Pose(),
+        )
+
+        # optionally you can automatically hide some Actors from view by appending to the self._hidden_objects list. When visual observations
+        # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
+        # This is useful if you intend to add some visual goal sites as e.g. done in PickCube that aren't actually part of the task
+        # and are there just for generating evaluation videos.
+        self._hidden_objects.append(self.goal_site)
+
+        # Randomize object physical and collision properties
         for i, obj in enumerate(self.cube._objs):
             # modify the i-th object which is in parallel environment i
 
@@ -111,27 +128,6 @@ class KinovaPickCubeEnv(PickCubeEnv):
 
                 min_restitution, max_restitution = self.restitution_range
                 shape.physical_material.restitution = torch.rand(1).item() * (max_restitution - min_restitution) + min_restitution
-
-        # we also add in red/white sphere target to visualize where we want the cube to be picked to
-        # we specify add_collisions=False as we only use this as a visual for videos and do not want it to affect the actual physics
-        # we finally specify the body_type to be "kinematic" so that the object stays in place
-        # goal_thresh = goal_radius
-
-        self.goal_site = actors.build_sphere(
-            self.scene,
-            radius=self.goal_radius,
-            color=[0, 1, 0, 1],
-            name="goal_site",
-            body_type="kinematic",
-            add_collision=False,
-            initial_pose=sapien.Pose(),
-        )
-
-        # optionally you can automatically hide some Actors from view by appending to the self._hidden_objects list. When visual observations
-        # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
-        # This is useful if you intend to add some visual goal sites as e.g. done in PickCube that aren't actually part of the task
-        # and are there just for generating evaluation videos.
-        self._hidden_objects.append(self.goal_site)
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         # use the torch.device context manager to automatically create tensors on CPU or CUDA depending on self.device, the device the environment runs on
@@ -159,26 +155,25 @@ class KinovaPickCubeEnv(PickCubeEnv):
             obj_pose = Pose.create_from_pq(p=xyz, q=q)
             self.cube.set_pose(obj_pose)
 
-            # here we set the location of that red/white target (the goal region). In particular here, we set the position to be a desired given position
-            # and we further rotate 90 degrees on the y-axis to make the target object face up
+            # here we set the location of the target (sphere)
+            # we set it as a fixed displacement above where the cube was spawned
             target_region_xyz = xyz.clone()
             target_region_xyz[..., :3] += torch.tensor(self.target_offset)
-            # set random z that should be within 3d range
-            # target_region_xyz[..., 2] = torch.rand(b) * block_gen_range
             self.goal_site.set_pose(
-                Pose.create_from_pq(
-                    p=target_region_xyz,
-                    q=euler2quat(0, np.pi / 2, 0),
-                )
+              Pose.create_from_pq(
+                p=target_region_xyz,
+                q=[1, 0, 0, 0],
+              )
             )
-        # set the keyframe for the robot
-        self.agent.robot.set_qpos(self.agent.keyframes["rest"].qpos)
+            # set the keyframe for the robot
+            self.agent.robot.set_qpos(self.agent.keyframes["rest"].qpos)
 
     def _get_obs_extra(self, info: Dict):
         # some useful observation info for solving the task includes the pose of the tcp (tool center point) which is the point between the
         # grippers of the robot
         obs = dict(
             tcp_pose=self.agent.tcp.pose.p,
+            # TODO: add the gripper state here
         )
         if self.obs_mode_struct.use_state:
             # if the observation mode requests to use state, we provide ground truth information about where the cube is.
@@ -200,7 +195,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
         info = super().evaluate()
         if "success" in info:
             info["_success"] = info.pop("success")
-            info["terminated"] = False
+        info["terminated"] = False
         return info
     
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):

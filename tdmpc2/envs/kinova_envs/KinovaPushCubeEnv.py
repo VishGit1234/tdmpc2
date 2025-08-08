@@ -74,7 +74,7 @@ class KinovaPushCubeEnv(PushCubeEnv):
         )
       )
       builder.set_initial_pose(sapien.Pose(p=[0, 0, cube_half_sizes[2]]))
-      obj = builder.build(name = f"object_{i}")
+      obj = builder.build(name = f"box_{i}")
       self.remove_from_state_dict_registry(obj)
       objects.append(obj)
     self.obj = Actor.merge(objects, name = "cube")
@@ -182,13 +182,13 @@ class KinovaPushCubeEnv(PushCubeEnv):
     # some useful observation info for solving the task includes the pose of the tcp (tool center point) which is the point between the
     # grippers of the robot
     obs = dict(
-        tcp_pose=self.agent.tcp.pose.p[:, :2],
+        tcp_pose=self.agent.tcp.pose.p,
     )
     if self.obs_mode_struct.use_state:
       # if the observation mode requests to use state, we provide ground truth information about where the cube is.
       # for visual observation modes one should rely on the sensed visual data to determine where the cube is
       obs.update(
-          goal_pos=self.goal_region.pose.p[:, :2],
+          goal_pos=self.goal_region.pose.p,
           obj_pose=self.obj.pose.raw_pose,
       )
     return obs
