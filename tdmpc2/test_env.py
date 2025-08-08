@@ -13,7 +13,8 @@ from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 kwargs = {
     "block_offset": [-0.3, 0.2],
     "block_gen_range": [0.1, 0.1],
-    "target_offset": [0., 0.2],
+    # "target_offset": [0., 0.2],
+    "target_offset": [0., 0., 0.2],
     "goal_radius": 0.05,
     "cube_randomization_ranges": {
         "size": ([0.04, 0.04, 0.04], [0.07, 0.07, 0.07]),
@@ -26,7 +27,7 @@ kwargs = {
 # render_mode = "human"
 render_mode = "rgb_array"
 num_envs = 2 if render_mode != "human" else 1
-env = gym.make("KinovaPushCube", num_envs=num_envs, control_mode="pd_ee_delta_pose", render_mode=render_mode, **kwargs)
+env = gym.make("KinovaPickCube", num_envs=num_envs, control_mode="pd_ee_delta_pose", render_mode=render_mode, **kwargs)
 env = GaussianObsNoise(env, std=0.01)  # Add Gaussian noise to observations
 env = FrameStack(env, num_stack=10)
 env = ScaleAction(env, scale_factor=0.1)  # Scale down the action space
@@ -41,10 +42,10 @@ frames = []
 while not done:
     # note that env.action_space is now a batched action space
     if num_envs == 1:
-        action = torch.tensor([[0.0, 1.0, 0.0, 0, 0, 0, 0]], device=env.get_wrapper_attr('device'))
+        action = torch.tensor([[0, 0, 0, -1]], device=env.get_wrapper_attr('device'))
         obs, rew, terminated, truncated, info = env.step(action)
     else:
-        action = torch.tensor([[0.0, 1.0, 0.0, 0, 0, 0, 0]] * num_envs, device=env.get_wrapper_attr('device'))
+        action = torch.tensor([[0, 0, 0, -1]] * num_envs, device=env.get_wrapper_attr('device'))
         obs, rew, terminated, truncated, info = env.step(action)
     frame = env.render()
     frames.extend(frame)
