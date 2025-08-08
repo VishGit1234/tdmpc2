@@ -2,7 +2,7 @@ defaults:
     - override hydra/launcher: submitit_local
 
 # environment
-task: kinova_push_cube
+task: kinova_pick_cube
 obs: state
 episodic: false
 num_envs: 128
@@ -10,7 +10,7 @@ obs_buffer_size: 10
 init_box_pos: [-0.3, 0.2]
 box_gen_range: [0.1, 0.1]
 termination_if_cube_goal_dist_less_than: 0.05
-target_pos: [0., 0.2]
+target_pos: [0., 0.2, 0.1]
 episode_length: 200 # manually set in KinovaPushCubeEnv
 action_scale: 0.1
 obs_noise_std: 0.01

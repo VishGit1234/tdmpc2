@@ -9,7 +9,7 @@ def make_env(cfg):
   if cfg.task not in SUPPORTED_TASKS:
     raise ValueError('Unknown task:', cfg.task)
   kwargs = {}
-  if cfg.task == 'kinova_push_cube':
+  if cfg.task == 'kinova_push_cube' or cfg.task == 'kinova_pick_cube':
     # Init kwargs dict
     kwargs = {
       "block_offset": cfg.init_box_pos,

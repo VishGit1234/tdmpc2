@@ -51,8 +51,8 @@ class KinovaPickCubeEnv(PickCubeEnv):
           "render_camera", pose=pose, width=512, height=512, fov=1, near=0.01, far=100
       )
 
-    def _load_agent(self, options: dict):
-        super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))
+    # def _load_agent(self, options: dict):
+    #     super()._load_agent(options, sapien.Pose(p=[-0.615, 0, 0]))
 
     def _load_scene(self, options: dict):
         # we use a prebuilt scene builder class that automatically loads in a floor and table.
@@ -86,11 +86,11 @@ class KinovaPickCubeEnv(PickCubeEnv):
             obj = builder.build(name = f"object_{i}")
             self.remove_from_state_dict_registry(obj)
             objects.append(obj)
-        self.obj = Actor.merge(objects, name = "cube")
-        self.add_to_state_dict_registry(self.obj)
+        self.cube = Actor.merge(objects, name = "cube")
+        self.add_to_state_dict_registry(self.cube)
 
          # Randomize object physical and collision properties
-        for i, obj in enumerate(self.obj._objs):
+        for i, obj in enumerate(self.cube._objs):
             # modify the i-th object which is in parallel environment i
 
             # modifying physical properties e.g. randomizing mass from 0.1 to 1kg
@@ -117,7 +117,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
         # we finally specify the body_type to be "kinematic" so that the object stays in place
         # goal_thresh = goal_radius
 
-        self.goal_region = actors.build_sphere(
+        self.goal_site = actors.build_sphere(
             self.scene,
             radius=self.goal_radius,
             color=[0, 1, 0, 1],
@@ -131,7 +131,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
         # are generated or env.render_sensors() is called or env.render() is called with render_mode="sensors", the actor will not show up.
         # This is useful if you intend to add some visual goal sites as e.g. done in PickCube that aren't actually part of the task
         # and are there just for generating evaluation videos.
-        self._hidden_objects.append(self.goal_region)
+        self._hidden_objects.append(self.goal_site)
 
     def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
         # use the torch.device context manager to automatically create tensors on CPU or CUDA depending on self.device, the device the environment runs on
@@ -157,15 +157,15 @@ class KinovaPickCubeEnv(PickCubeEnv):
             # environments. This is because internally any calls to set data on the GPU buffer (e.g. set_pose, set_linear_velocity etc.)
             # automatically are masked so that you can only set data on objects in environments that are meant to be initialized
             obj_pose = Pose.create_from_pq(p=xyz, q=q)
-            self.obj.set_pose(obj_pose)
+            self.cube.set_pose(obj_pose)
 
             # here we set the location of that red/white target (the goal region). In particular here, we set the position to be a desired given position
             # and we further rotate 90 degrees on the y-axis to make the target object face up
             target_region_xyz = xyz.clone()
             target_region_xyz[..., :3] += torch.tensor(self.target_offset)
             # set random z that should be within 3d range
-            target_region_xyz[..., 2] = torch.rand(b) * block_gen_range
-            self.goal_region.set_pose(
+            # target_region_xyz[..., 2] = torch.rand(b) * block_gen_range
+            self.goal_site.set_pose(
                 Pose.create_from_pq(
                     p=target_region_xyz,
                     q=euler2quat(0, np.pi / 2, 0),
@@ -184,8 +184,8 @@ class KinovaPickCubeEnv(PickCubeEnv):
             # if the observation mode requests to use state, we provide ground truth information about where the cube is.
             # for visual observation modes one should rely on the sensed visual data to determine where the cube is
             obs.update(
-                goal_pos=self.goal_region.pose.p,
-                obj_pose=self.obj.pose.raw_pose,
+                goal_pos=self.goal_site.pose.p,
+                obj_pose=self.cube.pose.raw_pose,
             )
         return obs
 
@@ -205,7 +205,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
     
     def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
         # pose to pick cube
-        tcp_to_pick_pose = self.obj.pose.p - self.agent.tcp.pose.p
+        tcp_to_pick_pose = self.cube.pose.p - self.agent.tcp.pose.p
         tcp_to_pick_pose_dist = torch.linalg.norm(tcp_to_pick_pose, axis=1)
         reaching_reward = 1 - torch.tanh(5 * tcp_to_pick_pose_dist)
         reward = reaching_reward
@@ -215,7 +215,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
         # This reward design helps train RL agents faster by staging the reward out.
         reached = tcp_to_pick_pose_dist < 0.01
         obj_to_goal_dist = torch.linalg.norm(
-            self.obj.pose.p - self.goal_region.pose.p, axis=1
+            self.cube.pose.p - self.goal_site.pose.p, axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
