@@ -21,7 +21,7 @@ kwargs = {
         "dynamic_friction": (0.1, 0.3),
         "static_friction": (0.1, 0.3),
         "restitution": (0.1, 0.3),
-        "mass": (0.9, 1.0)
+        "mass": (0.02, 0.06)
     }
 }
 # render_mode = "human"
@@ -39,8 +39,8 @@ done = False
 start_time = time.time()
 total_rew = 0
 frames = []
+step_count = 0
 while not done:
-    # note that env.action_space is now a batched action space
     if num_envs == 1:
         action = torch.tensor([[0, 0, 0, -1]], device=env.get_wrapper_attr('device'))
         obs, rew, terminated, truncated, info = env.step(action)
@@ -50,6 +50,7 @@ while not done:
     frame = env.render()
     frames.extend(frame)
     done = (terminated | truncated).any() # stop if any environment terminates/truncates
+    step_count += 1
 N = num_envs * info["elapsed_steps"][0].item()
 dt = time.time() - start_time
 FPS = N / (dt)

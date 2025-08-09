@@ -18,7 +18,7 @@ from mani_skill.utils.structs import Pose
 from transforms3d.euler import euler2quat
 from mani_skill.utils.structs.types import Array
 
-@register_env("KinovaPushCube", max_episode_steps=200)
+@register_env("KinovaPushCube", max_episode_steps=300)
 class KinovaPushCubeEnv(PushCubeEnv):
   SUPPORTED_ROBOTS = [
     "kinova_gen3",

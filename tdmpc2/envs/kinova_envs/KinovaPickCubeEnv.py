@@ -18,7 +18,7 @@ from mani_skill.utils.structs import Pose
 from transforms3d.euler import euler2quat
 from mani_skill.utils.structs.types import Array
 
-@register_env("KinovaPickCube", max_episode_steps=200)
+@register_env("KinovaPickCube", max_episode_steps=300)
 class KinovaPickCubeEnv(PickCubeEnv):
     SUPPORTED_ROBOTS = [
         "kinova_gen3",
@@ -168,6 +168,9 @@ class KinovaPickCubeEnv(PickCubeEnv):
             # set the keyframe for the robot
             self.agent.robot.set_qpos(self.agent.keyframes["rest"].qpos)
 
+            # store initial block position for computing rewards
+            self.initial_block_pos = self.cube.pose.p.clone()
+
     def _get_obs_extra(self, info: Dict):
         # some useful observation info for solving the task includes the pose of the tcp (tool center point) which is the point between the
         # grippers of the robot
@@ -214,6 +217,13 @@ class KinovaPickCubeEnv(PickCubeEnv):
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
         reward += place_reward * reached
+
+        # add a reward to prevent block movement before it is lifted off the ground
+        # this reward is only active when the block is on the ground
+        is_lifted = self.cube.pose.p[:, 2] > self.cube_half_size + 0.005
+        block_movement = torch.linalg.norm(self.cube.pose.p[:, :2] - self.initial_block_pos[:, :2], axis=1)
+        block_movement_cost = torch.tanh(5 * block_movement)
+        reward -= block_movement_cost * (~is_lifted)
 
         # assign rewards to parallel environments that achieved success to the maximum of 3.
         reward[info["_success"]] = 4
