@@ -18,7 +18,7 @@ from mani_skill.utils.structs import Pose
 from transforms3d.euler import euler2quat
 from mani_skill.utils.structs.types import Array
 
-@register_env("KinovaPickCube", max_episode_steps=300)
+@register_env("KinovaPickCube", max_episode_steps=400)
 class KinovaPickCubeEnv(PickCubeEnv):
     SUPPORTED_ROBOTS = [
         "kinova_gen3",
@@ -64,12 +64,13 @@ class KinovaPickCubeEnv(PickCubeEnv):
         max_size, min_size = self.cube_size_range
         max_size = torch.tensor(max_size)
         min_size = torch.tensor(min_size)
+
         objects = []
-        cube_size = torch.rand(3) * (max_size - min_size) + min_size
-        cube_half_sizes = cube_size/2
+        self.cube_half_sizes = torch.zeros((self.num_envs, 3), device=self.device)
         for i in range(self.num_envs):
             builder = self.scene.create_actor_builder()
             cube_size = torch.rand(3) * (max_size - min_size) + min_size
+            cube_half_sizes = cube_size / 2
             builder.add_box_collision(half_size=cube_half_sizes)
             builder.set_scene_idxs([i])
             builder.add_box_visual(
@@ -82,6 +83,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
             obj = builder.build(name = f"object_{i}")
             self.remove_from_state_dict_registry(obj)
             objects.append(obj)
+            self.cube_half_sizes[i] = cube_half_sizes
         self.cube = Actor.merge(objects, name = "cube")
         self.add_to_state_dict_registry(self.cube)
 
@@ -145,7 +147,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
             block_gen_range = torch.tensor(self.block_gen_range)
             block_offset = torch.tensor(self.block_offset)
             xyz[..., :2] = torch.rand((b, 2)) * block_gen_range + (block_offset - block_gen_range/2)
-            xyz[..., 2] = self.cube_half_size
+            xyz[..., 2] = self.cube_half_sizes[:, 2]
             q = [1, 0, 0, 0]
             # we can then create a pose object using Pose.create_from_pq to then set the cube pose with. Note that even though our quaternion
             # is not batched, Pose.create_from_pq will automatically batch p or q accordingly
@@ -195,38 +197,44 @@ class KinovaPickCubeEnv(PickCubeEnv):
         )
 
     def evaluate(self):
-        info = super().evaluate()
-        if "success" in info:
-            info["_success"] = info.pop("success")
-        info["terminated"] = False
-        return info
-    
-    def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
-        # pose to pick cube
-        tcp_to_pick_pose = self.cube.pose.p - self.agent.tcp.pose.p
-        tcp_to_pick_pose_dist = torch.linalg.norm(tcp_to_pick_pose, axis=1)
-        reaching_reward = 1 - torch.tanh(5 * tcp_to_pick_pose_dist)
+        is_obj_placed = (
+            torch.linalg.norm(self.goal_site.pose.p - self.cube.pose.p, axis=1)
+            <= self.goal_radius
+        )
+        is_grasped = self.agent.is_grasping(self.cube)
+        is_robot_static = self.agent.is_static(0.2)
+        return {
+            "_success": is_obj_placed & is_robot_static,
+            "is_obj_placed": is_obj_placed,
+            "is_robot_static": is_robot_static,
+            "is_grasped": is_grasped,
+            "terminated": False
+        }
+
+    def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
+        tcp_center_pose = self.agent.tcp.pose.p
+        tcp_center_pose[:, 2] += 0.1 # the tcp is slightly below the end effector, so we raise it a bit
+        tcp_to_obj_dist = torch.linalg.norm(
+            self.cube.pose.p - tcp_center_pose, axis=1
+        )
+        reaching_reward = 1 - torch.tanh(5 * tcp_to_obj_dist)
         reward = reaching_reward
 
-        # compute a placement reward to encourage robot to move the cube to the center of the goal region
-        # we further multiply the place_reward by a mask reached so we only add the place reward if the robot has reached the desired pick pose
-        # This reward design helps train RL agents faster by staging the reward out.
-        reached = tcp_to_pick_pose_dist < 0.01
+        is_grasped = info["is_grasped"]
+        reward += is_grasped
+
         obj_to_goal_dist = torch.linalg.norm(
-            self.cube.pose.p - self.goal_site.pose.p, axis=1
+            self.goal_site.pose.p - self.cube.pose.p, axis=1
         )
         place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
-        reward += place_reward * reached
+        reward += place_reward * is_grasped
 
-        # add a reward to prevent block movement before it is lifted off the ground
-        # this reward is only active when the block is on the ground
-        is_lifted = self.cube.pose.p[:, 2] > self.cube_half_size + 0.005
-        block_movement = torch.linalg.norm(self.cube.pose.p[:, :2] - self.initial_block_pos[:, :2], axis=1)
-        block_movement_cost = torch.tanh(5 * block_movement)
-        reward -= block_movement_cost * (~is_lifted)
+        qvel = self.agent.robot.get_qvel()
+        qvel = qvel[..., :-2]
+        static_reward = 1 - torch.tanh(5 * torch.linalg.norm(qvel, axis=1))
+        reward += static_reward * info["is_obj_placed"]
 
-        # assign rewards to parallel environments that achieved success to the maximum of 3.
-        reward[info["_success"]] = 4
+        reward[info["_success"]] = 5
         return reward
     
     def render(self):

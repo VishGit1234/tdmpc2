@@ -46,7 +46,7 @@ def make_env(cfg):
 	env = GaussianObsNoise(env, std=cfg.obs_noise_std)  # Add Gaussian noise to observations
 	env = FrameStack(env, num_stack=cfg.obs_buffer_size)
 	env = ScaleAction(env, scale_factor=cfg.action_scale)  # Scale down the action space
-	env = RepeatAction(env, repeat=10)  # Repeat actions
+	env = RepeatAction(env, repeat=20)  # Repeat actions
 	cfg.obs_shape = {cfg.get('obs', 'state'): (env.observation_space.shape[1], )}
 	cfg.action_dim = env.action_space.shape[1]
 	cfg.seed_steps = max(1000, 5*cfg.episode_length) * cfg.num_envs

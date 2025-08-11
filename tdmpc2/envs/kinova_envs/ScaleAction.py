@@ -2,7 +2,7 @@ import torch
 import gymnasium as gym
 
 class ScaleAction(gym.ActionWrapper):  
-	def __init__(self, env, scale_factor=1, x_limits=[-0.4, 0.1], y_limits=[-0.6, 0.6], z_limits=[0.02, 0.6], gripper_control=True):
+	def __init__(self, env, scale_factor=1, x_limits=[-0.4, 0.1], y_limits=[-0.6, 0.6], z_limits=[0.01, 0.6], gripper_control=True):
 		super().__init__(env)
 		self.scale_factor = scale_factor
 		self.x_limits = x_limits

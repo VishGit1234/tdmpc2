@@ -59,12 +59,11 @@ class KinovaPushCubeEnv(PushCubeEnv):
     min_size = torch.tensor(min_size)
 
     objects = []
+    self.cube_half_sizes = torch.zeros((self.num_envs, 3), device=self.device)
     for i in range(self.num_envs):
       builder = self.scene.create_actor_builder()
       cube_size = torch.rand(3) * (max_size - min_size) + min_size
-      cube_half_sizes = cube_size/2
-      # ignore the randomization in height
-      cube_half_sizes[2] = self.cube_half_size
+      cube_half_sizes = cube_size / 2
       builder.add_box_collision(half_size=cube_half_sizes)
       builder.set_scene_idxs([i])
       builder.add_box_visual(
@@ -77,6 +76,7 @@ class KinovaPushCubeEnv(PushCubeEnv):
       obj = builder.build(name = f"box_{i}")
       self.remove_from_state_dict_registry(obj)
       objects.append(obj)
+      self.cube_half_sizes[i] = cube_half_sizes
     self.obj = Actor.merge(objects, name = "cube")
     self.add_to_state_dict_registry(self.obj)
 
@@ -146,7 +146,7 @@ class KinovaPushCubeEnv(PushCubeEnv):
       block_gen_range = torch.tensor(self.block_gen_range)
       block_offset = torch.tensor(self.block_offset)
       xyz[..., :2] = torch.rand((b, 2)) * block_gen_range + (block_offset - block_gen_range/2)
-      xyz[..., 2] = self.cube_half_size
+      xyz[..., 2] = self.cube_half_sizes[:, 2]
       q = [1, 0, 0, 0]
       # we can then create a pose object using Pose.create_from_pq to then set the cube pose with. Note that even though our quaternion
       # is not batched, Pose.create_from_pq will automatically batch p or q accordingly
@@ -172,10 +172,19 @@ class KinovaPushCubeEnv(PushCubeEnv):
       self.agent.robot.set_qpos(self.agent.keyframes["rest"].qpos)
 
   def evaluate(self):
-    info = super().evaluate()
-    if "success" in info:
-      info["_success"] = info.pop("success")
-    info["terminated"] = False
+    # success is achieved when the cube's xy position on the table is within the
+    # goal region's area (a circle centered at the goal region's xy position) and
+    # the cube is still on the surface
+    is_obj_placed = (
+        torch.linalg.norm(
+            self.obj.pose.p[..., :2] - self.goal_region.pose.p[..., :2], axis=1
+        )
+        < self.goal_radius
+    ) & (self.obj.pose.p[..., 2] < self.cube_half_sizes[:, 2] + 5e-3)
+    info = {
+      "_success": is_obj_placed,
+      "terminated": False
+    }
     return info
 
   def _get_obs_extra(self, info: Dict):
@@ -206,7 +215,7 @@ class KinovaPushCubeEnv(PushCubeEnv):
     tcp_push_pose = Pose.create_from_pq(
         p=self.obj.pose.p
         # Note the below line will change based on where the cube is placed
-        + torch.tensor([0, -self.cube_half_size - 0.005, 0], device=self.device)
+        + torch.tensor([0, -self.cube_half_sizes[:, 1] - 0.005, 0], device=self.device)
     )
     tcp_to_push_pose = tcp_push_pose.p - self.agent.tcp.pose.p
     tcp_to_push_pose_dist = torch.linalg.norm(tcp_to_push_pose, axis=1)
@@ -222,16 +231,6 @@ class KinovaPushCubeEnv(PushCubeEnv):
     )
     place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
     reward += place_reward * reached
-    
-    # Compute a z reward to encourage the robot to keep the cube on the table
-    desired_obj_z = self.cube_half_size
-    current_obj_z = self.obj.pose.p[..., 2]
-    z_deviation = torch.abs(current_obj_z - desired_obj_z)
-    z_reward = 1 - torch.tanh(5 * z_deviation)
-    # We multiply the z reward by the place_reward and reached mask so that 
-    #   we only add the z reward if the robot has reached the desired push pose
-    #   and the z reward becomes more important as the robot gets closer to the goal.
-    reward += place_reward * z_reward * reached
 
     # assign rewards to parallel environments that achieved success to the maximum of 3.
     reward[info["_success"]] = 4

@@ -31,7 +31,7 @@ env = gym.make("KinovaPickCube", num_envs=num_envs, control_mode="pd_ee_delta_po
 env = GaussianObsNoise(env, std=0.01)  # Add Gaussian noise to observations
 env = FrameStack(env, num_stack=10)
 env = ScaleAction(env, scale_factor=0.1)  # Scale down the action space
-env = RepeatAction(env, repeat=10)  # Repeat actions
+env = RepeatAction(env, repeat=20)  # Repeat actions
 env.unwrapped.print_sim_details()
 env.is_rendered = True  # Enable rendering in RepeatAction wrapper
 obs, _ = env.reset(seed=0)
@@ -40,12 +40,19 @@ start_time = time.time()
 total_rew = 0
 frames = []
 step_count = 0
-while not done:
+while not done or render_mode == "human":
+    print(f"Step {step_count}")
+    if step_count < 7:
+        action_value = [0, 0.3, -0.3, -1]  # Move down for first 7 steps
+    elif step_count < 14:
+        action_value = [0, 0, 0, 1]
+    else:
+        action_value = [0, 0, 1, 1]
     if num_envs == 1:
-        action = torch.tensor([[0, 0, 0, -1]], device=env.get_wrapper_attr('device'))
+        action = torch.tensor([action_value], device=env.get_wrapper_attr('device'))
         obs, rew, terminated, truncated, info = env.step(action)
     else:
-        action = torch.tensor([[0, 0, 0, -1]] * num_envs, device=env.get_wrapper_attr('device'))
+        action = torch.tensor([action_value] * num_envs, device=env.get_wrapper_attr('device'))
         obs, rew, terminated, truncated, info = env.step(action)
     frame = env.render()
     frames.extend(frame)
@@ -55,4 +62,5 @@ N = num_envs * info["elapsed_steps"][0].item()
 dt = time.time() - start_time
 FPS = N / (dt)
 print(f"Frames Per Second = {N} / {dt} = {FPS}")
-ImageSequenceClip(frames, fps=30).write_videofile("output_video.mp4", codec="libx264")
+if render_mode == "rgb_array":
+    ImageSequenceClip(frames, fps=30).write_videofile("output_video.mp4", codec="libx264")
