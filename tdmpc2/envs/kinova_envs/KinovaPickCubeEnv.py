@@ -19,7 +19,7 @@ from mani_skill.utils.structs import Pose
 from transforms3d.euler import euler2quat
 from mani_skill.utils.structs.types import Array
 
-@register_env("KinovaPickCube", max_episode_steps=400)
+@register_env("KinovaPickCube", max_episode_steps=200)
 class KinovaPickCubeEnv(PickCubeEnv):
 	SUPPORTED_ROBOTS = [
 		"kinova_gen3",
@@ -50,7 +50,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
 		# registers a more high-definition (512x512) camera used just for rendering when render_mode="rgb_array" or calling env.render_rgb_array()
 		pose = sapien_utils.look_at([0.6, 1.0, 0.6], [0.0, 0.3, 0.35])
 		return CameraConfig(
-			"render_camera", pose=pose, width=512, height=512, fov=1, near=0.01, far=100
+			"render_camera", pose=pose, width=256, height=256, fov=1, near=0.01, far=100
 		)
 
 
@@ -209,11 +209,9 @@ class KinovaPickCubeEnv(PickCubeEnv):
 			<= self.goal_radius
 		)
 		is_grasped = self.agent.is_grasping(self.cube)
-		is_robot_static = self.agent.is_static(0.2)
 		return {
-			"_success": is_obj_placed & is_robot_static,
+			"_success": is_obj_placed,
 			"is_obj_placed": is_obj_placed,
-			"is_robot_static": is_robot_static,
 			"is_grasped": is_grasped,
 			"terminated": False
 		}
@@ -236,11 +234,6 @@ class KinovaPickCubeEnv(PickCubeEnv):
 		)
 		place_reward = 1 - torch.tanh(5 * obj_to_goal_dist)
 		reward += place_reward * is_grasped
-
-		qvel = self.agent.robot.get_qvel()
-		qvel = qvel[..., :-2]
-		static_reward = 1 - torch.tanh(5 * torch.linalg.norm(qvel, axis=1))
-		reward += static_reward * info["is_obj_placed"]
 
 		reward[info["_success"]] = 5
 		return reward

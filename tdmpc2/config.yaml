@@ -12,7 +12,7 @@ box_gen_range: [0.1, 0.1]
 termination_if_cube_goal_dist_less_than: 0.05
 push_target_offset: [0., 0.2]
 pick_target_offset: [0., 0., 0.2]
-episode_length: 400 # manually set in env class files
+episode_length: 200 # manually set in env class files
 action_scale: 0.1
 obs_noise_std: 0.01
 cube_randomization_ranges:
@@ -30,7 +30,7 @@ eval_freq: 199_936 # must be a multiple of num_envs
 # training
 steps: 3_999_744 # should be multiple of num_envs
 batch_size: 512
-steps_per_update: 256 # should be a divisor of num_envs
+steps_per_update: 32 # should be a divisor of num_envs
 reward_coef: 0.1
 value_coef: 0.1
 termination_coef: 1
