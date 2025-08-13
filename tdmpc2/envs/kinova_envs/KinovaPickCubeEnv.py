@@ -183,7 +183,8 @@ class KinovaPickCubeEnv(PickCubeEnv):
 		# grippers of the robot
 		obs = dict(
 			tcp_pose=self.agent.tcp.pose.p,
-			gripper_state=self.agent.robot.get_qpos()[:, 7]/0.821
+			gripper_state=self.agent.robot.get_qpos()[:, 7]/0.821,
+			is_grasped=info["is_grasped"]
 		)
 		if self.obs_mode_struct.use_state:
 			# if the observation mode requests to use state, we provide ground truth information about where the cube is.

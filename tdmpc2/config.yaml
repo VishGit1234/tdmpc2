@@ -6,14 +6,14 @@ task: kinova_pick_cube
 obs: state
 episodic: false
 num_envs: 256
-num_eval_envs: 16
-obs_buffer_size: 7
+num_eval_envs: 10
+obs_buffer_size: 4
 init_box_pos: [-0.3, 0.2]
 box_gen_range: [0.1, 0.1]
 termination_if_cube_goal_dist_less_than: 0.05
 push_target_offset: [0., 0.2]
 pick_target_offset: [0., 0., 0.2]
-episode_length: 200 # manually set in env class files
+episode_length: 20 # number of control steps
 action_scale: 0.1
 obs_noise_std: 0.01
 cube_randomization_ranges:
