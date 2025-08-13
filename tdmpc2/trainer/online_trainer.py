@@ -9,11 +9,12 @@ from trainer.base import Trainer
 class OnlineTrainer(Trainer):
 	"""Trainer class for single-task online TD-MPC2 training."""
 
-	def __init__(self, *args, **kwargs):
+	def __init__(self, eval_env, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self._step = 0
 		self._ep_idx = 0
 		self._start_time = time()
+		self.eval_env = eval_env
 
 	def common_metrics(self):
 		"""Return a dictionary of current metrics."""
@@ -27,25 +28,26 @@ class OnlineTrainer(Trainer):
 
 	def eval(self):
 		"""Evaluate a TD-MPC2 agent."""
-		if hasattr(self.env, 'is_rendered'):
-			self.env.is_rendered = True
+		if hasattr(self.eval_env, 'is_rendered'):
+			self.eval_env.is_rendered = True
+		self.agent.eval_mode = True
 		ep_rewards, ep_successes, ep_lengths = [], [], []
-		for i in range(self.cfg.eval_episodes // self.cfg.num_envs):
-			obs, _ = self.env.reset()
+		for i in range(self.cfg.eval_episodes // self.cfg.num_eval_envs):
+			obs, _ = self.eval_env.reset()
 			done = torch.tensor(False)
-			ep_reward = torch.zeros(self.cfg.num_envs, device=self.env.get_wrapper_attr('device'))
+			ep_reward = torch.zeros(self.cfg.num_eval_envs, device=self.eval_env.get_wrapper_attr('device'))
 			t = 0
 			if self.cfg.save_video:
-				self.logger.video.init(self.env, enabled=(i==0))
+				self.logger.video.init(self.eval_env, enabled=(i==0))
 			while not done.any():
 				torch.compiler.cudagraph_mark_step_begin()
 				action = self.agent.act(obs.to(self.cfg.cuda_device), t0=t==0, eval_mode=True)
-				obs, reward, terminated, truncated, info = self.env.step(action)
+				obs, reward, terminated, truncated, info = self.eval_env.step(action)
 				done = terminated | truncated
 				ep_reward += reward
 				t += 1
 				if self.cfg.save_video:
-					self.logger.video.record(self.env)
+					self.logger.video.record(self.eval_env)
 			assert done.all(), 'Vectorized environments must reset all environments at once.'
 			ep_rewards.append(ep_reward)
 			ep_successes.append(info['_success'])
@@ -54,6 +56,7 @@ class OnlineTrainer(Trainer):
 				self.logger.video.save(self._step)
 		if hasattr(self.env, 'is_rendered'):
 			self.env.is_rendered = False
+		self.agent.eval_mode = False
 		return dict(
 			episode_reward=torch.cat(ep_rewards).mean().cpu(),
 			episode_success=100*torch.cat(ep_successes).float().mean().cpu(),

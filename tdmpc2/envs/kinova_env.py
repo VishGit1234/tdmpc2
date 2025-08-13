@@ -26,4 +26,11 @@ def make_env(cfg):
       control_mode="pd_ee_delta_pose",
       **kwargs
     )
-  return env
+    eval_env = gym.make(
+      task_name,
+      num_envs=cfg.num_eval_envs,
+      render_mode="rgb_array",
+      control_mode="pd_ee_delta_pose",
+      **kwargs
+    )
+  return env, eval_env

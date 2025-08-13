@@ -18,6 +18,7 @@ class TDMPC2(torch.nn.Module):
 	def __init__(self, cfg):
 		super().__init__()
 		self.cfg = cfg
+		self.eval_mode = False
 		self.device = torch.device(self.cfg.cuda_device)
 		self.model = WorldModel(cfg).to(self.device)
 		self.optim = torch.optim.Adam([
@@ -38,10 +39,19 @@ class TDMPC2(torch.nn.Module):
 		) if self.cfg.multitask else self._get_discount(cfg.episode_length)
 		print('Episode length:', cfg.episode_length)
 		print('Discount factor:', self.discount)
-		self._prev_mean = torch.nn.Buffer(torch.zeros(self.cfg.num_envs, self.cfg.horizon, self.cfg.action_dim, device=self.device))
+		self._prev_mean_train = torch.nn.Buffer(torch.zeros(self.cfg.num_envs, self.cfg.horizon, self.cfg.action_dim, device=self.device))
+		self._prev_mean_eval = torch.nn.Buffer(torch.zeros(self.cfg.num_eval_envs, self.cfg.horizon, self.cfg.action_dim, device=self.device))
 		if cfg.compile:
 			print('Compiling update function with torch.compile...')
 			self._update = torch.compile(self._update, mode="reduce-overhead")
+
+	@property
+	def _prev_mean(self):
+		return self._prev_mean_eval if self.eval_mode else self._prev_mean_train
+
+	@property
+	def num_envs(self):
+		return self.cfg.num_eval_envs if self.eval_mode else self.cfg.num_envs
 
 	@property
 	def plan(self):
@@ -186,7 +196,7 @@ class TDMPC2(torch.nn.Module):
 		# Sample policy trajectories
 		z = self.model.encode(obs, task)
 		if self.cfg.num_pi_trajs > 0:
-			pi_actions = torch.empty(self.cfg.num_envs, self.cfg.horizon, self.cfg.num_pi_trajs, self.cfg.action_dim, device=self.device)
+			pi_actions = torch.empty(self.num_envs, self.cfg.horizon, self.cfg.num_pi_trajs, self.cfg.action_dim, device=self.device)
 			_z = z.unsqueeze(1).expand(-1, self.cfg.num_pi_trajs, -1)
 			for t in range(self.cfg.horizon-1):
 				pi_actions[:, t], _ = self.model.pi(_z, task)
@@ -195,11 +205,11 @@ class TDMPC2(torch.nn.Module):
 
 		# Initialize state and parameters
 		z = z.unsqueeze(1).expand(-1, self.cfg.num_samples, -1)
-		mean = torch.zeros(self.cfg.num_envs, self.cfg.horizon, self.cfg.action_dim, device=self.device)
-		std = self.cfg.max_std*torch.ones(self.cfg.num_envs, self.cfg.horizon, self.cfg.action_dim, device=self.device)
+		mean = torch.zeros(self.num_envs, self.cfg.horizon, self.cfg.action_dim, device=self.device)
+		std = self.cfg.max_std*torch.ones(self.num_envs, self.cfg.horizon, self.cfg.action_dim, device=self.device)
 		if not t0:
 			mean[:, :-1] = self._prev_mean[:, 1:]
-		actions = torch.empty(self.cfg.num_envs, self.cfg.horizon, self.cfg.num_samples, self.cfg.action_dim, device=self.device)
+		actions = torch.empty(self.num_envs, self.cfg.horizon, self.cfg.num_samples, self.cfg.action_dim, device=self.device)
 		if self.cfg.num_pi_trajs > 0:
 			actions[:, :, :self.cfg.num_pi_trajs] = pi_actions
 
@@ -207,7 +217,7 @@ class TDMPC2(torch.nn.Module):
 		for _ in range(self.cfg.iterations):
 
 			# Sample actions
-			r = torch.randn(self.cfg.num_envs, self.cfg.horizon, self.cfg.num_samples-self.cfg.num_pi_trajs, self.cfg.action_dim, device=std.device)
+			r = torch.randn(self.num_envs, self.cfg.horizon, self.cfg.num_samples-self.cfg.num_pi_trajs, self.cfg.action_dim, device=std.device)
 			actions_sample = mean.unsqueeze(2) + std.unsqueeze(2) * r
 			actions_sample = actions_sample.clamp(-1, 1)
 			actions[:, :, self.cfg.num_pi_trajs:] = actions_sample
@@ -233,7 +243,7 @@ class TDMPC2(torch.nn.Module):
 
 		# Select action
 		rand_idx = math.gumbel_softmax_sample(score.squeeze(2), dim=1)  # gumbel_softmax_sample is compatible with cuda graphs
-		actions = elite_actions[torch.arange(self.cfg.num_envs), :, rand_idx]
+		actions = elite_actions[torch.arange(self.num_envs), :, rand_idx]
 		action, std = actions[:, 0], std[:, 0]
 		if not eval_mode:
 			action = action + std * torch.randn(self.cfg.action_dim, device=std.device)

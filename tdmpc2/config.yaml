@@ -6,6 +6,7 @@ task: kinova_pick_cube
 obs: state
 episodic: false
 num_envs: 256
+num_eval_envs: 16
 obs_buffer_size: 7
 init_box_pos: [-0.3, 0.2]
 box_gen_range: [0.1, 0.1]
@@ -28,9 +29,9 @@ eval_episodes: 256 # must be multiple of num_envs
 eval_freq: 199_936 # must be a multiple of num_envs
 
 # training
-steps: 3_999_744 # should be multiple of num_envs
+steps: 2_560_000 # should be multiple of num_envs
 batch_size: 512
-steps_per_update: 32 # should be a divisor of num_envs
+steps_per_update: 16 # should be a divisor of num_envs
 reward_coef: 0.1
 value_coef: 0.1
 termination_coef: 1

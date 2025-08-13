@@ -64,7 +64,7 @@ class KinovaPickCubeEnv(PickCubeEnv):
 		# we then add the cube that we want to pick and give it a color and size using a convenience build_cube function
 		# we specify the body_type to be "dynamic" as it should be able to move when touched by other objects / the robot
 		# finally we specify an initial pose for the cube so that it doesn't collide with other objects initially
-		max_size, min_size = self.cube_size_range
+		min_size, max_size = self.cube_size_range
 		max_size = torch.tensor(max_size)
 		min_size = torch.tensor(min_size)
 

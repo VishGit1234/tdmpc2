@@ -49,10 +49,13 @@ def train(cfg: dict):
 	set_seed(cfg.seed)
 	print(colored('Work dir:', 'yellow', attrs=['bold']), cfg.work_dir)
 
-	trainer_cls = OfflineTrainer if cfg.multitask else OnlineTrainer
+	# trainer_cls = OfflineTrainer if cfg.multitask else OnlineTrainer
+	trainer_cls = OnlineTrainer
+	env, eval_env = make_env(cfg)
 	trainer = trainer_cls(
 		cfg=cfg,
-		env=make_env(cfg),
+		env=env,
+		eval_env=eval_env,
 		agent=TDMPC2(cfg),
 		buffer=Buffer(cfg),
 		logger=Logger(cfg),

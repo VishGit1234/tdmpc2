@@ -54,7 +54,7 @@ class KinovaPushCubeEnv(PushCubeEnv):
     # we then add the cube that we want to push and give it a color and size using a convenience build_cube function
     # we specify the body_type to be "dynamic" as it should be able to move when touched by other objects / the robot
     # finally we specify an initial pose for the cube so that it doesn't collide with other objects initially
-    max_size, min_size = self.cube_size_range
+    min_size, max_size = self.cube_size_range
     max_size = torch.tensor(max_size)
     min_size = torch.tensor(min_size)
 
@@ -124,10 +124,9 @@ class KinovaPushCubeEnv(PushCubeEnv):
 
   @property
   def _default_human_render_camera_configs(self):
-      # registers a more high-definition (512x512) camera used just for rendering when render_mode="rgb_array" or calling env.render_rgb_array()
       pose = sapien_utils.look_at([-0.1, 1.7, 1.2], [-0.1, 0.8, 0.35])
       return CameraConfig(
-          "render_camera", pose=pose, width=512, height=512, fov=1, near=0.01, far=100
+          "render_camera", pose=pose, width=256, height=256, fov=1, near=0.01, far=100
       )
 
   def _initialize_episode(self, env_idx: torch.Tensor, options: dict):

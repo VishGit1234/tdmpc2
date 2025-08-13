@@ -38,19 +38,24 @@ def make_multitask_env(cfg):
 	cfg.episode_lengths = env._episode_lengths
 	return env
 
-def make_env(cfg):
-	"""
-	Make kinova environment for TD-MPC2 experiments.
-	"""
-	env = make_kinova_env(cfg)
+def wrap_env(cfg, env):
 	env = GaussianObsNoise(env, std=cfg.obs_noise_std)  # Add Gaussian noise to observations
 	env = FrameStack(env, num_stack=cfg.obs_buffer_size)
 	env = ScaleAction(env, scale_factor=cfg.action_scale)  # Scale down the action space
 	env = RepeatAction(env, repeat=10)  # Repeat actions
+	return env
+
+def make_env(cfg):
+	"""
+	Make kinova environment for TD-MPC2 experiments.
+	"""
+	env, eval_env = make_kinova_env(cfg)
+	env = wrap_env(cfg, env)
 	cfg.obs_shape = {cfg.get('obs', 'state'): (env.observation_space.shape[1], )}
 	cfg.action_dim = env.action_space.shape[1]
 	cfg.seed_steps = max(1000, 5*cfg.episode_length) * cfg.num_envs
-	return env
+	eval_env = wrap_env(cfg, eval_env)
+	return env, eval_env
 
 # def make_env(cfg):
 # 	"""
