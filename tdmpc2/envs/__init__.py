@@ -42,7 +42,7 @@ def wrap_env(cfg, env):
 	env = GaussianObsNoise(env, std=cfg.obs_noise_std)  # Add Gaussian noise to observations
 	env = FrameStack(env, num_stack=cfg.obs_buffer_size)
 	env = ScaleAction(env, scale_factor=cfg.action_scale)  # Scale down the action space
-	env = RepeatAction(env, repeat=10)  # Repeat actions
+	env = RepeatAction(env, repeat=cfg.action_repeat)  # Repeat actions
 	return env
 
 def make_env(cfg):

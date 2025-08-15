@@ -180,8 +180,10 @@ class KinovaPushCubeEnv(PushCubeEnv):
         )
         < self.goal_radius
     ) & (self.obj.pose.p[..., 2] < self.cube_half_sizes[:, 2] + 5e-3)
+    is_grasped = self.agent.is_grasping(self.obj)
     info = {
       "_success": is_obj_placed,
+      "is_grasped": is_grasped,
       "terminated": False
     }
     return info
@@ -191,7 +193,8 @@ class KinovaPushCubeEnv(PushCubeEnv):
     # grippers of the robot
     obs = dict(
         tcp_pose=self.agent.tcp.pose.p,
-        gripper_state=self.agent.robot.get_qpos()[:, 7]/0.821
+        gripper_state=self.agent.robot.get_qpos()[:, 7]/0.821,
+        is_grasped=info["is_grasped"]
     )
     if self.obs_mode_struct.use_state:
       # if the observation mode requests to use state, we provide ground truth information about where the cube is.
@@ -211,10 +214,12 @@ class KinovaPushCubeEnv(PushCubeEnv):
 
   def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
     # We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
+    offsets = torch.zeros_like(self.cube_half_sizes, device=self.device)
+    offsets[:, 1] = -self.cube_half_sizes[:, 1] - 0.005
     tcp_push_pose = Pose.create_from_pq(
         p=self.obj.pose.p
         # Note the below line will change based on where the cube is placed
-        + torch.tensor([0, -self.cube_half_sizes[:, 1] - 0.005, 0], device=self.device)
+        + offsets
     )
     tcp_to_push_pose = tcp_push_pose.p - self.agent.tcp.pose.p
     tcp_to_push_pose_dist = torch.linalg.norm(tcp_to_push_pose, axis=1)
