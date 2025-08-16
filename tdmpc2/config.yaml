@@ -13,6 +13,7 @@ box_gen_range: [0.1, 0.1]
 termination_if_cube_goal_dist_less_than: 0.05
 push_target_offset: [0., 0.2]
 pick_target_offset: [0., 0., 0.2]
+stack_target_offset: [0.2, 0.2]
 episode_length: 20 # number of control steps
 action_scale: 0.2
 action_repeat: 10
