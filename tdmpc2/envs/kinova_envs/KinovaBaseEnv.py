@@ -23,7 +23,7 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 	def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
 		self.cubeA_init_pos = kwargs["cubeA_init_pos"]
 		self.cubeA_gen_range = kwargs["cubeA_gen_range"]
-		self.cubeB_init_pos = kwargs["cubeB_init_pos"]
+		self.cubeB_offset = kwargs["cubeB_offset"]
 		self.cubeB_gen_range = kwargs["cubeB_gen_range"]
 
 		self.cube_rand_ranges = kwargs["cube_randomization_ranges"]
@@ -35,7 +35,7 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 
 		del kwargs["cubeA_init_pos"]
 		del kwargs["cubeA_gen_range"]
-		del kwargs["cubeB_init_pos"]
+		del kwargs["cubeB_offset"]
 		del kwargs["cubeB_gen_range"]
 		del kwargs["cube_randomization_ranges"]
 		super().__init__(*args, robot_uids=robot_uids, **kwargs)
@@ -142,13 +142,14 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 
 			# here we write some randomization code that randomizes the x, y position of the cube we are pushing in the desired range
 			xyz = torch.zeros((b, 3))
-			block_gen_range = torch.tensor(self.block_gen_range)
-			block_offset = torch.tensor(self.block_offset)
-			xy = torch.rand((b, 2)) * block_gen_range + (block_offset - block_gen_range/2)
+			cubeA_gen_range = torch.tensor(self.cubeA_gen_range)
+			cubeA_init_pos = torch.tensor(self.cubeA_init_pos)
+			xy = torch.rand((b, 2)) * cubeA_gen_range + (cubeA_init_pos - cubeA_gen_range/2)
 			cubeA_xy = xy
 			cubeB_xy = xy.clone()
-			target_offset = torch.tensor(self.target_offset)
-			cubeB_xy[:, :2] += torch.rand((b, 2)) * block_gen_range + (target_offset - block_gen_range/2)
+			cubeB_gen_range = torch.tensor(self.cubeB_gen_range)
+			cubeB_offset = torch.tensor(self.cubeB_offset)
+			cubeB_xy[:, :2] += torch.rand((b, 2)) * cubeB_gen_range + (cubeB_offset - cubeB_gen_range/2)
 
 			xyz[:, :2] = cubeA_xy
 			xyz[:, 2] = self.cubeA_half_sizes[:, 2]
@@ -175,6 +176,7 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 		)
 		if "state" in self.obs_mode:
 			obs.update(
+				goal_pos=info["goal_pos"],
 				cubeA_pose=self.cubeA.pose.raw_pose,
 				cubeB_pose=self.cubeB.pose.raw_pose,
 				tcp_to_cubeA_pos=self.cubeA.pose.p - self.agent.tcp.pose.p,
@@ -193,7 +195,8 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 	@abstractmethod
 	def evaluate(self):
 		return {
-			"is_cubeA_grasped": self.agent.is_grasping(self.cubeA)
+			"is_cubeA_grasped": self.agent.is_grasping(self.cubeA),
+			"terminated": False
 		}
 	
 	@abstractmethod
