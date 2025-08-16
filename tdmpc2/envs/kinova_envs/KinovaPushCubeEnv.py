@@ -15,10 +15,6 @@ from mani_skill.utils.structs.types import Array
 
 @register_env("KinovaPushCube", max_episode_steps=200)
 class KinovaPushCubeEnv(KinovaBaseEnv):
-	SUPPORTED_ROBOTS = [
-		"kinova_gen3",
-	]
-
 	def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
 		self.target_offset = kwargs["target_offset"]
 		self.goal_radius = kwargs["goal_radius"]
