@@ -1,5 +1,3 @@
-from typing import Any, Dict
-
 import numpy as np
 import sapien
 import torch
@@ -73,7 +71,7 @@ class KinovaPushCubeEnv(KinovaBaseEnv):
 		})
 		return info
 
-	def compute_dense_reward(self, obs: Any, action: Array, info: Dict):
+	def compute_dense_reward(self, obs, action: Array, info: dict):
 		# We also create a pose marking where the robot should push the cube from that is easiest (pushing from behind the cube)
 		offsets = torch.zeros_like(self.cubeA_half_sizes, device=self.device)
 		offsets[:, 1] = -self.cubeA_half_sizes[:, 1] - 0.005

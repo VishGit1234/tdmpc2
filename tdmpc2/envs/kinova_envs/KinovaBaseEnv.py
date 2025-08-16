@@ -176,7 +176,7 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 		)
 		if "state" in self.obs_mode:
 			obs.update(
-				goal_pos=info["goal_pos"],
+				goal_pos=info["goal_pos"] if "goal_pos" in info else torch.zeros((self.num_envs, 3), device=self.device),
 				cubeA_pose=self.cubeA.pose.raw_pose,
 				cubeB_pose=self.cubeB.pose.raw_pose,
 				tcp_to_cubeA_pos=self.cubeA.pose.p - self.agent.tcp.pose.p,

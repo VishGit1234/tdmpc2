@@ -1,5 +1,3 @@
-from typing import Any, Dict
-
 import numpy as np
 import sapien
 import torch
@@ -75,7 +73,7 @@ class KinovaPickCubeEnv(KinovaBaseEnv):
 		})
 		return info
 
-	def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
+	def compute_dense_reward(self, obs, action: torch.Tensor, info: dict):
 		tcp_center_pose = self.agent.tcp.pose.p
 		tcp_center_pose[:, 2] += 0.1 # the tcp is slightly below the end effector, so we raise it a bit
 		tcp_to_obj_dist = torch.linalg.norm(
