@@ -31,7 +31,9 @@ class OnlineTrainer(Trainer):
 		if hasattr(self.eval_env, 'is_rendered'):
 			self.eval_env.is_rendered = True
 		self.agent.eval_mode = True
-		ep_rewards, ep_successes, ep_lengths = [], [], []
+		ep_rewards = [[] for _ in self.cfg.tasks]
+		ep_successes = [[] for _ in self.cfg.tasks]
+		ep_lengths = [[] for _ in self.cfg.tasks]
 		for i in range(self.cfg.eval_episodes // self.cfg.num_eval_envs):
 			obs, _ = self.eval_env.reset()
 			done = torch.tensor(False)
@@ -52,20 +54,21 @@ class OnlineTrainer(Trainer):
 				if self.cfg.save_video:
 					self.logger.video.record(self.eval_env)
 			assert done.all(), 'Vectorized environments must reset all environments at once.'
-			ep_rewards.append(ep_reward)
-			ep_successes.append(info['_success'])
-			ep_lengths.append(t)
+			task_idx = 0 if not self.cfg.multitask else self.eval_env.task_idx
+			ep_rewards[task_idx].append(ep_reward)
+			ep_successes[task_idx].append(info['_success'])
+			ep_lengths[task_idx].append(t)
 			if self.cfg.save_video:
 				self.logger.video.save(self._step)
 		if hasattr(self.env, 'is_rendered'):
 			self.env.is_rendered = False
 		self.agent.eval_mode = False
-		return dict(
-			episode_reward=torch.cat(ep_rewards).mean().cpu(),
-			episode_success=100*torch.cat(ep_successes).float().mean().cpu(),
-			episode_length=np.nanmean(ep_lengths),
-		)
-	
+		get_task = lambda i: self.eval_env.get_task(i) if self.cfg.multitask else self.cfg.task
+		eval_info = {f"episode_rewards_{get_task(i)}": torch.cat(v).mean().cpu() for i, v in enumerate(ep_rewards)}
+		eval_info.update({f"episode_successes_{get_task(i)}": 100*torch.cat(v).float().mean().cpu() for i, v in enumerate(ep_successes)})
+		eval_info.update({f"episode_lengths_{get_task(i)}": np.nanmean(v) for i, v in enumerate(ep_lengths)})
+		return eval_info
+
 	def to_td(self, obs, action=None, reward=None, terminated=None):
 		"""Creates a TensorDict for a new episode."""
 		if isinstance(obs, dict):

@@ -7,9 +7,9 @@ class KinovaMultitaskEnv(gym.Wrapper):
 		self.pick_cube_env = gym.make("KinovaPickCube", num_envs = num_envs, **kwargs["pick_cube_kwargs"])
 		self.stack_cube_env = gym.make("KinovaStackCube", num_envs = num_envs, **kwargs["stack_cube_kwargs"])
 		self.envs = [
-			("PushCube", self.push_cube_env),
-			("PickCube", self.pick_cube_env),
-			("StackCube", self.stack_cube_env)
+			("push_cube", self.push_cube_env),
+			("pick_cube", self.pick_cube_env),
+			("stack_cube", self.stack_cube_env)
 		]
 		super().__init__(self.push_cube_env)
 		assert self.push_cube_env.observation_space == self.pick_cube_env.observation_space == self.stack_cube_env.observation_space, "Observation spaces must be equal"
@@ -40,6 +40,9 @@ class KinovaMultitaskEnv(gym.Wrapper):
 	@property
 	def _env(self):
 		return self.envs[self._task_idx][1]
+	
+	def get_task(self, task_idx):
+		return self.envs[task_idx][0]
 
 	def reset(self, task_idx = None, seed = None, options = None):
 		if task_idx is None:
