@@ -41,7 +41,10 @@ class OnlineTrainer(Trainer):
 				self.logger.video.init(self.eval_env, enabled=(i==0))
 			while not done.any():
 				torch.compiler.cudagraph_mark_step_begin()
-				action = self.agent.act(obs.to(self.cfg.cuda_device), t0=t==0, eval_mode=True)
+				if self.cfg.multitask:
+					action = self.agent.act(obs.to(self.cfg.cuda_device), t0=t==0, task=self.eval_env.task_idx)
+				else:
+					action = self.agent.act(obs.to(self.cfg.cuda_device), t0=t==0)
 				obs, reward, terminated, truncated, info = self.eval_env.step(action)
 				done = terminated | truncated
 				ep_reward += reward
@@ -118,7 +121,10 @@ class OnlineTrainer(Trainer):
 
 			# Collect experience
 			if self._step > self.cfg.seed_steps:
-				action = self.agent.act(obs.to(self.cfg.cuda_device), t0=len(self._tds)==1)
+				if self.cfg.multitask:
+					action = self.agent.act(obs.to(self.cfg.cuda_device), t0=len(self._tds)==1, task=self.env.task_idx)
+				else:
+					action = self.agent.act(obs.to(self.cfg.cuda_device), t0=len(self._tds)==1)
 			else:
 				action = torch.from_numpy(self.env.action_space.sample()).to(self.cfg.cuda_device)
 			obs, reward, terminated, truncated, info = self.env.step(action)
@@ -133,7 +139,10 @@ class OnlineTrainer(Trainer):
 				else:
 					num_updates = max(1, int(self.cfg.num_envs / self.cfg.steps_per_update))
 				for _ in range(num_updates):
-					_train_metrics = self.agent.update(self.buffer)
+					if self.cfg.multitask:
+						_train_metrics = self.agent.update(self.buffer, task=self.env.task_idx)
+					else:
+						_train_metrics = self.agent.update(self.buffer)
 				train_metrics.update(_train_metrics)
 
 			self._step += self.cfg.num_envs

@@ -2,18 +2,20 @@ defaults:
     - override hydra/launcher: submitit_local
 
 # environment
-task: kinova_push_cube
+task: kinova_multitask
 obs: state
 episodic: false
-num_envs: 128
+num_envs: 44
 num_eval_envs: 10
 obs_buffer_size: 4
-init_box_pos: [-0.3, 0.2]
-box_gen_range: [0.1, 0.1]
-termination_if_cube_goal_dist_less_than: 0.05
+cubeA_init_pos: [-0.3, 0.2]
+cubeA_gen_range: [0.1, 0.1]
+cubeB_offset: [-0.1, 0.2]
+cubeB_gen_range: [0.1, 0.1]
+push_goal_radius: 0.05
+pick_goal_radius: 0.05
 push_target_offset: [0., 0.2]
 pick_target_offset: [0., 0., 0.2]
-stack_target_offset: [0.2, 0.2]
 episode_length: 20 # number of control steps
 action_scale: 0.2
 action_repeat: 10
@@ -27,13 +29,13 @@ cube_randomization_ranges:
 
 # evaluation
 checkpoint: ???
-eval_episodes: 128 # must be multiple of num_envs
-eval_freq: 64_000 # must be a multiple of num_envs
+eval_episodes: 44 # must be multiple of num_envs
+eval_freq: 63_976 # must be a multiple of num_envs
 
 # training
-steps: 1_280_000 # should be multiple of num_envs
+steps: 880_000 # should be multiple of num_envs
 batch_size: 1024
-steps_per_update: 8 # should be a divisor of num_envs
+steps_per_update: 4 # should be a divisor of num_envs
 reward_coef: 0.1
 value_coef: 0.1
 termination_coef: 1
@@ -80,7 +82,7 @@ enc_dim: 48
 num_channels: 32
 mlp_dim: 48
 latent_dim: 32
-task_dim: 96
+task_dim: 12
 num_q: 2
 dropout: 0.01
 simnorm_dim: 8

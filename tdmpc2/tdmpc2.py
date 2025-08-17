@@ -34,9 +34,7 @@ class TDMPC2(torch.nn.Module):
 		self.model.eval()
 		self.scale = RunningScale(cfg)
 		self.cfg.iterations += 2*int(cfg.action_dim >= 20) # Heuristic for large action spaces
-		self.discount = torch.tensor(
-			[self._get_discount(ep_len) for ep_len in cfg.episode_lengths], device=cfg.cuda_device
-		) if self.cfg.multitask else self._get_discount(cfg.episode_length)
+		self.discount = self._get_discount(cfg.episode_length)
 		print('Episode length:', cfg.episode_length)
 		print('Discount factor:', self.discount)
 		self._prev_mean_train = torch.nn.Buffer(torch.zeros(self.cfg.num_envs, self.cfg.horizon, self.cfg.action_dim, device=self.device))
@@ -158,7 +156,7 @@ class TDMPC2(torch.nn.Module):
 				reward = math.two_hot_inv(self.model.reward(z_rollout, action, task), self.cfg)
 				z_rollout = self.model.next(z_rollout, action, task)
 				G += discount * reward
-				discount_update = self.discount[torch.tensor(task)] if self.cfg.multitask else self.discount
+				discount_update = self.discount
 				discount *= discount_update
 			# Terminal Q-value
 			terminal_value = discount * self.model.Q(z_rollout, self.model.pi(z_rollout, task)[0], task, return_type='avg')
@@ -172,7 +170,7 @@ class TDMPC2(torch.nn.Module):
 				reward = math.two_hot_inv(self.model.reward(z, actions[:, t], task), self.cfg)
 				z = self.model.next(z, actions[:, t], task)
 				G = G + discount * (1-termination) * reward
-				discount_update = self.discount[torch.tensor(task)] if self.cfg.multitask else self.discount
+				discount_update = self.discount
 				discount = discount * discount_update
 				if self.cfg.episodic:
 					termination = torch.clip(termination + (self.model.termination(z, task) > 0.5).float(), max=1.)
@@ -221,8 +219,6 @@ class TDMPC2(torch.nn.Module):
 			actions_sample = mean.unsqueeze(2) + std.unsqueeze(2) * r
 			actions_sample = actions_sample.clamp(-1, 1)
 			actions[:, :, self.cfg.num_pi_trajs:] = actions_sample
-			if self.cfg.multitask:
-				actions = actions * self.model._action_masks[task]
 
 			# Compute elite actions
 			value = self._estimate_value(z, actions, task).nan_to_num(0)
@@ -237,9 +233,6 @@ class TDMPC2(torch.nn.Module):
 			mean = (score.unsqueeze(1) * elite_actions).sum(2) / (score.sum(1, keepdim=True) + 1e-9)
 			std = ((score.unsqueeze(1) * (elite_actions - mean.unsqueeze(2)) ** 2).sum(2) / (score.sum(1, keepdim=True) + 1e-9)).sqrt()
 			std = std.clamp(self.cfg.min_std, self.cfg.max_std)
-			if self.cfg.multitask:
-				mean = mean * self.model._action_masks[task]
-				std = std * self.model._action_masks[task]
 
 		# Select action
 		rand_idx = math.gumbel_softmax_sample(score.squeeze(2), dim=1)  # gumbel_softmax_sample is compatible with cuda graphs
@@ -298,7 +291,7 @@ class TDMPC2(torch.nn.Module):
 			torch.Tensor: TD-target.
 		"""
 		action, _ = self.model.pi(next_z, task)
-		discount = self.discount[task].unsqueeze(-1) if self.cfg.multitask else self.discount
+		discount = self.discount
 		return reward + discount * ((1 - terminated) if self.cfg.episodic else 1) * self.model.Q(next_z, action, task, return_type='min', target=True)
 
 	def _update(self, obs, action, reward, terminated, task=None):
@@ -380,7 +373,7 @@ class TDMPC2(torch.nn.Module):
 		info.update(pi_info)
 		return info.detach().mean()
 
-	def update(self, buffer):
+	def update(self, buffer, task=None):
 		"""
 		Main update function. Corresponds to one iteration of model learning.
 
@@ -392,7 +385,7 @@ class TDMPC2(torch.nn.Module):
 		"""
 		obs, action, reward, terminated = buffer.sample()
 		kwargs = {}
-		# if task is not None:
-		# 	kwargs["task"] = task
+		if task is not None:
+			kwargs["task"] = task
 		torch.compiler.cudagraph_mark_step_begin()
 		return self._update(obs, action, reward, terminated, **kwargs)

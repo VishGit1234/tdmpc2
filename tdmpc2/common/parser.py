@@ -68,14 +68,11 @@ def parse_cfg(cfg: OmegaConf) -> OmegaConf:
 			cfg.latent_dim = 512 # This checkpoint is slightly smaller
 
 	# Multi-task
-	cfg.multitask = cfg.task in TASK_SET.keys()
-	if cfg.multitask:
-		cfg.task_title = cfg.task.upper()
-		# Account for slight inconsistency in task_dim for the mt30 experiments
-		cfg.task_dim = 96 if cfg.task == 'mt80' or cfg.get('model_size', 5) in {1, 317} else 64
+	if cfg.task == "kinova_multitask":
+		cfg.multitask = True
+		cfg.tasks = ["kinova_push_cube", "kinova_pick_cube", "kinova_stack_cube"]
 	else:
-		cfg.task_dim = 0
-	cfg.tasks = TASK_SET.get(cfg.task, [cfg.task])
+		cfg.multitask = False
 	
   # cuda device
 	if cfg.get('cuda_device', None) is not None:
