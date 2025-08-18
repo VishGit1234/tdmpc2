@@ -34,13 +34,14 @@ class OnlineTrainer(Trainer):
 		ep_rewards = [[] for _ in self.cfg.tasks]
 		ep_successes = [[] for _ in self.cfg.tasks]
 		ep_lengths = [[] for _ in self.cfg.tasks]
+		get_task = lambda i: self.eval_env.get_task(i) if self.cfg.multitask else self.cfg.task
 		for i in range(self.cfg.eval_episodes // self.cfg.num_eval_envs):
 			obs, _ = self.eval_env.reset()
 			done = torch.tensor(False)
 			ep_reward = torch.zeros(self.cfg.num_eval_envs, device=self.eval_env.get_wrapper_attr('device'))
 			t = 0
 			if self.cfg.save_video:
-				self.logger.video.init(self.eval_env, enabled=(i==0))
+				self.logger.video.init(self.eval_env, enabled=(i < len(self.cfg.tasks)))
 			while not done.any():
 				torch.compiler.cudagraph_mark_step_begin()
 				if self.cfg.multitask:
@@ -59,11 +60,10 @@ class OnlineTrainer(Trainer):
 			ep_successes[task_idx].append(info['_success'])
 			ep_lengths[task_idx].append(t)
 			if self.cfg.save_video:
-				self.logger.video.save(self._step)
+				self.logger.video.save(self._step, key=f"videos/eval_video_{self.eval_env.get_task(task_idx)}")
 		if hasattr(self.env, 'is_rendered'):
 			self.env.is_rendered = False
 		self.agent.eval_mode = False
-		get_task = lambda i: self.eval_env.get_task(i) if self.cfg.multitask else self.cfg.task
 		eval_info = {f"episode_rewards_{get_task(i)}": torch.cat(v).mean().cpu() for i, v in enumerate(ep_rewards)}
 		eval_info.update({f"episode_successes_{get_task(i)}": 100*torch.cat(v).float().mean().cpu() for i, v in enumerate(ep_successes)})
 		eval_info.update({f"episode_lengths_{get_task(i)}": np.nanmean(v) for i, v in enumerate(ep_lengths)})
@@ -91,7 +91,7 @@ class OnlineTrainer(Trainer):
 
 	def train(self):
 		"""Train a TD-MPC2 agent."""
-		train_metrics, done, eval_next = {}, torch.tensor(True), False
+		train_metrics, done, eval_next = {}, torch.tensor(True), True
 		while self._step <= self.cfg.steps:
 			# Evaluate agent periodically
 			if self._step % self.cfg.eval_freq == 0 and self._step > 0:

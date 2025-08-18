@@ -89,7 +89,7 @@ class VideoRecorder:
 	def init(self, env, enabled=True):
 		self.frames = []
 		self.enabled = self._save_dir and self._wandb and enabled
-		self.record(env)
+		# self.record(env)
 
 	def record(self, env):
 		if self.enabled:

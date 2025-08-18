@@ -10,7 +10,7 @@ num_eval_envs: 10
 obs_buffer_size: 4
 cubeA_init_pos: [-0.3, 0.2]
 cubeA_gen_range: [0.1, 0.1]
-cubeB_offset: [-0.1, 0.2]
+cubeB_offset: [0.1, 0.2]
 cubeB_gen_range: [0.1, 0.1]
 push_goal_radius: 0.05
 pick_goal_radius: 0.05
@@ -29,7 +29,7 @@ cube_randomization_ranges:
 
 # evaluation
 checkpoint: ???
-eval_episodes: 44 # must be multiple of num_envs
+eval_episodes: 30 # should be 3x num_eval_envs
 eval_freq: 63_976 # must be a multiple of num_envs
 
 # training
