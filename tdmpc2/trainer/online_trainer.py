@@ -60,7 +60,7 @@ class OnlineTrainer(Trainer):
 			ep_successes[task_idx].append(info['_success'])
 			ep_lengths[task_idx].append(t)
 			if self.cfg.save_video:
-				self.logger.video.save(self._step, key=f"videos/eval_video_{self.eval_env.get_task(task_idx)}")
+				self.logger.video.save(self._step, key=f"videos/eval_video_{get_task(task_idx)}")
 		if hasattr(self.env, 'is_rendered'):
 			self.env.is_rendered = False
 		self.agent.eval_mode = False

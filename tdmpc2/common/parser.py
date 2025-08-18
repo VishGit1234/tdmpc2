@@ -73,6 +73,8 @@ def parse_cfg(cfg: OmegaConf) -> OmegaConf:
 		cfg.tasks = ["kinova_push_cube", "kinova_pick_cube", "kinova_stack_cube"]
 	else:
 		cfg.multitask = False
+		cfg.tasks = [cfg.task]
+		cfg.task_dim = 0
 	
   # cuda device
 	if cfg.get('cuda_device', None) is not None:
