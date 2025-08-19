@@ -94,6 +94,20 @@ class KinovaGen3(BaseAgent):
       ee_link=self.ee_link_name,
       urdf_path=self.urdf_path,
     )
+    ## Non-delta ee pose controller
+    arm_pd_ee_pose = PDEEPoseControllerConfig(
+      joint_names=self.arm_joint_names,
+      pos_lower=-0.1,
+      pos_upper=0.1,
+      rot_lower=-0.1,
+      rot_upper=0.1,
+      stiffness=self.arm_stiffness,
+      damping=self.arm_damping,
+      force_limit=self.arm_force_limit,
+      ee_link=self.ee_link_name,
+      urdf_path=self.urdf_path,
+      use_delta=False,
+    )
     # define a passive controller config to simply "turn off" other joints from being controlled and set their properties (damping/friction) to 0.
     # these joints are controlled passively by the mimic controller later on.
     passive_finger_joint_names = [
@@ -140,6 +154,11 @@ class KinovaGen3(BaseAgent):
       pd_ee_delta_pose=dict(
         arm=arm_pd_ee_delta_pose,
         finger=finger_mimic_pd_joint_delta_pos,
+        passive_finger_joints=passive_finger_joints,
+      ),
+      pd_ee_pose=dict(
+        arm=arm_pd_ee_pose,
+        finger=finger_mimic_pd_joint_pos,
         passive_finger_joints=passive_finger_joints,
       ),
     )

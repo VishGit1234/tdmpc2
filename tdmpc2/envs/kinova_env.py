@@ -1,5 +1,4 @@
 from envs.kinova_envs import SUPPORTED_TASKS
-from envs.kinova_envs.ScaleAction import ScaleAction
 import gymnasium as gym
 
 from envs.kinova_envs.KinovaMultitaskEnv import KinovaMultitaskEnv

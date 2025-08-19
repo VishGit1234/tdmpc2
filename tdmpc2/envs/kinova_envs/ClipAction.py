@@ -1,10 +1,9 @@
 import torch
 import gymnasium as gym
 
-class ScaleAction(gym.ActionWrapper):  
-	def __init__(self, env, scale_factor=1, x_limits=[-0.4, 0.1], y_limits=[-0.6, 0.6], z_limits=[0.01, 0.6], gripper_control=True):
+class ClipAction(gym.ActionWrapper):  
+	def __init__(self, env, x_limits=[-0.4, 0.1], y_limits=[-0.6, 0.6], z_limits=[0.01, 0.6], gripper_control=True):
 		super().__init__(env)
-		self.scale_factor = scale_factor
 		self.x_limits = x_limits
 		self.y_limits = y_limits
 		self.z_limits = z_limits
@@ -29,4 +28,4 @@ class ScaleAction(gym.ActionWrapper):
 			action[:, 3] = 0
 		# Set ee rotation controls to zero
 		action = torch.cat([action[:, :3], torch.zeros(action.shape[0], 3, device=action.device, dtype=action.dtype), action[:, 3:]], dim=1)
-		return action * self.scale_factor
+		return action

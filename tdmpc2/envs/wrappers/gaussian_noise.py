@@ -2,7 +2,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 
-class GaussianObsNoise(gym.ObservationWrapper):
+class GaussianObsNoise(gym.ObservationWrapper, gym.ActionWrapper):
   """
   Adds Gaussian noise to observations.
   """
@@ -17,3 +17,10 @@ class GaussianObsNoise(gym.ObservationWrapper):
     else:
       noise = np.random.normal(self.mean, self.std, size=np.shape(obs))
     return obs + noise
+  
+  def action(self, action):
+    if isinstance(action, torch.Tensor):
+      noise = torch.normal(mean=self.mean, std=self.std, size=action.shape, device=action.device, dtype=action.dtype)
+    else:
+      noise = np.random.normal(self.mean, self.std, size=np.shape(action))
+    return action + noise
