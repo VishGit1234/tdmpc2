@@ -7,7 +7,7 @@ from envs.kinova_envs.KinovaBaseEnv import KinovaBaseEnv
 from mani_skill.utils.registration import register_env
 from mani_skill.utils.structs import Pose
 
-@register_env("KinovaStackCube", max_episode_steps=40)
+@register_env("KinovaStackCube", max_episode_steps=100)
 class KinovaStackCubeEnv(KinovaBaseEnv):
 	def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
 		super().__init__(*args, robot_uids=robot_uids, **kwargs)

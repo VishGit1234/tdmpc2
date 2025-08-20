@@ -67,6 +67,10 @@ class OnlineTrainer(Trainer):
 		eval_info = {f"episode_rewards_{get_task(i)}": torch.cat(v).mean().cpu() for i, v in enumerate(ep_rewards)}
 		eval_info.update({f"episode_successes_{get_task(i)}": 100*torch.cat(v).float().mean().cpu() for i, v in enumerate(ep_successes)})
 		eval_info.update({f"episode_lengths_{get_task(i)}": np.nanmean(v) for i, v in enumerate(ep_lengths)})
+		try:
+			self.logger.save_agent(self.agent, identifier=f"step_{self._step}")
+		except Exception as e:
+			pass
 		return eval_info
 
 	def to_td(self, obs, action=None, reward=None, terminated=None):
@@ -91,7 +95,7 @@ class OnlineTrainer(Trainer):
 
 	def train(self):
 		"""Train a TD-MPC2 agent."""
-		train_metrics, done, eval_next = {}, torch.tensor(True), True
+		train_metrics, done, eval_next = {}, torch.tensor(True), False
 		while self._step <= self.cfg.steps:
 			# Evaluate agent periodically
 			if self._step % self.cfg.eval_freq == 0 and self._step > 0:
