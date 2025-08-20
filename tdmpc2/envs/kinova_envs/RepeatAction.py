@@ -14,11 +14,10 @@ class RepeatAction(gym.Wrapper):
     
   def step(self, action):
     action = action * self.scale_factor
-    act = action.clone()
     done = False
     self.frames = []
     for _ in range(self.num_repeats):
-      obs, reward, terminated, truncated, info = self.env.step(act)
+      obs, reward, terminated, truncated, info = self.env.step(action)
       done = terminated | truncated
       if self.is_rendered:
         self.frames.append(self.env.render())  # Render the environment

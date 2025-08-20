@@ -12,8 +12,8 @@ from mani_skill.utils.structs.actor import Actor
 from mani_skill.utils import sapien_utils
 from mani_skill.sensors.camera import CameraConfig
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
-from mani_skill.utils.structs.actor import Actor
 from mani_skill.utils.structs import Pose
+from mani_skill.utils.structs.types import SimConfig
 
 class KinovaBaseEnv(StackCubeEnv, ABC):
 	SUPPORTED_ROBOTS = [
@@ -32,13 +32,16 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 		self.static_friction_range = self.cube_rand_ranges["static_friction"]
 		self.restitution_range = self.cube_rand_ranges["restitution"]
 		self.mass_range = self.cube_rand_ranges["mass"]
+		
+		sim_config = SimConfig(control_freq=kwargs.get("control_freq", 2))
 
 		del kwargs["cubeA_init_pos"]
 		del kwargs["cubeA_gen_range"]
 		del kwargs["cubeB_offset"]
 		del kwargs["cubeB_gen_range"]
 		del kwargs["cube_randomization_ranges"]
-		super().__init__(*args, robot_uids=robot_uids, **kwargs)
+		del kwargs["control_freq"]
+		super().__init__(*args, robot_uids=robot_uids, sim_config=sim_config, **kwargs)
 
 	@property
 	def _default_sensor_configs(self):

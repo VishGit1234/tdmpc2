@@ -12,6 +12,7 @@ def make_env(cfg):
 
   # Environment options that are common across tasks
   general_kwargs = {
+    "control_freq": cfg.control_freq,
     "render_mode": "rgb_array",
     "control_mode": "pd_ee_delta_pose",
     # Initial positions and generation ranges for cubes

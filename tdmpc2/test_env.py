@@ -1,19 +1,20 @@
 from envs.wrappers.frame_stack import FrameStack
 from envs.wrappers.gaussian_noise import GaussianObsNoise
-from envs.wrappers.repeat_action import RepeatAction
-from envs.kinova_envs.ScaleAction import ScaleAction
+from envs.kinova_envs.ClipAction import ClipAction
+from envs.kinova_envs.RepeatAction import RepeatAction
 import gymnasium as gym
 import torch
 import time
 import numpy as np
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 
-from envs.kinova_envs import KinovaMultitaskEnv
+from envs.kinova_envs import KinovaPickCubeEnv
 
 render_mode = "rgb_array"  # "human" for interactive display, "rgb_array" for video
 
 # Init kwargs dict
 push_cube_kwargs = {
+  "control_freq": 2,
   "render_mode": render_mode,
   "control_mode": "pd_ee_delta_pose",
   # Initial positions and generation ranges for cubes
@@ -34,6 +35,7 @@ push_cube_kwargs = {
   }
 }
 pick_cube_kwargs = {
+  "control_freq": 2,
   "render_mode": render_mode,
   "control_mode": "pd_ee_delta_pose",
   # Initial positions and generation ranges for cubes
@@ -54,6 +56,7 @@ pick_cube_kwargs = {
   }
 }
 stack_cube_kwargs = {
+  "control_freq": 2,
   "render_mode": render_mode,
   "control_mode": "pd_ee_delta_pose",
   # Initial positions and generation ranges for cubes
@@ -76,12 +79,12 @@ kwargs = {
   "stack_cube_kwargs": stack_cube_kwargs  
 }
 num_envs = 2 if render_mode != "human" else 1
-env = KinovaMultitaskEnv(num_envs=num_envs, **kwargs)
-env = GaussianObsNoise(env, std=0.01)  # Add Gaussian noise to observations
+env = gym.make("KinovaPickCube", num_envs=num_envs, **pick_cube_kwargs)
+# env = GaussianObsNoise(env, std=0.01)  # Add Gaussian noise to observations
 env = FrameStack(env, num_stack=5)
-env = ScaleAction(env, scale_factor=0.2)  # Scale down the action space
-env = RepeatAction(env, repeat=10)  # Repeat actions
-env.print_sim_details()
+env = ClipAction(env)
+env = RepeatAction(env, scale_factor=0.2, num_repeats=1)
+# env.unwrapped.print_sim_details()
 env.is_rendered = True  # Enable rendering in RepeatAction wrapper
 obs, _ = env.reset(seed=0)
 done = False
@@ -93,9 +96,9 @@ original_obs = obs[0, :4].clone()
 while not done or render_mode == "human":
   print(f"Step {step_count}")
   if step_count == 0:
-    action_value = [1, 1, 1, 1]  # Move down for first 7 steps
+    action_value = [1, 1, 1, 0]
   else:
-    action_value = [0, 0, 0, 0]
+    action_value = [0, 0.3, 0, 0.4]
   if num_envs == 1:
     action = torch.tensor([action_value], device=env.get_wrapper_attr('device'))
     obs, rew, terminated, truncated, info = env.step(action)

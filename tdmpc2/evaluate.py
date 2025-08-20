@@ -51,12 +51,13 @@ def evaluate(cfg: dict):
 		print(colored('To evaluate a multi-task model, use task=mt80 or task=mt30.', 'red', attrs=['bold']))
 
 	# Make environment
-	env = make_env(cfg)
+	_, env = make_env(cfg)
 	if hasattr(env, 'is_rendered'):
 		env.is_rendered = True
 
 	# Load agent
 	agent = TDMPC2(cfg)
+	agent.eval_mode = True
 	assert os.path.exists(cfg.checkpoint), f'Checkpoint {cfg.checkpoint} not found! Must be a valid filepath.'
 	agent.load(cfg.checkpoint)
 	
@@ -74,7 +75,7 @@ def evaluate(cfg: dict):
 		if not cfg.multitask:
 			task_idx = None
 		ep_rewards, ep_successes = [], []
-		for i in range(cfg.eval_episodes // cfg.num_envs):
+		for i in range(cfg.eval_episodes // cfg.num_eval_envs):
 			obs, _ = env.reset()
 			done, ep_reward, t = torch.tensor([False]), 0, 0
 			if cfg.save_video:

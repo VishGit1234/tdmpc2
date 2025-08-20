@@ -11,7 +11,7 @@ from mani_skill.utils.structs import Pose
 from transforms3d.euler import euler2quat
 from mani_skill.utils.structs.types import Array
 
-@register_env("KinovaPushCube", max_episode_steps=200)
+@register_env("KinovaPushCube", max_episode_steps=40)
 class KinovaPushCubeEnv(KinovaBaseEnv):
 	def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
 		self.target_offset = kwargs["target_offset"]
