@@ -7,9 +7,9 @@ class KinovaMultitaskEnv(gym.Wrapper):
 		self.pick_cube_env = gym.make("KinovaPickCube", num_envs = num_envs, **kwargs["pick_cube_kwargs"])
 		self.stack_cube_env = gym.make("KinovaStackCube", num_envs = num_envs, **kwargs["stack_cube_kwargs"])
 		self.envs = [
-			("push_cube", self.push_cube_env),
-			("pick_cube", self.pick_cube_env),
-			("stack_cube", self.stack_cube_env)
+			("kinova_push_cube", self.push_cube_env),
+			("kinova_pick_cube", self.pick_cube_env),
+			("kinova_stack_cube", self.stack_cube_env)
 		]
 		super().__init__(self.push_cube_env)
 		assert self.push_cube_env.observation_space == self.pick_cube_env.observation_space == self.stack_cube_env.observation_space, "Observation spaces must be equal"
