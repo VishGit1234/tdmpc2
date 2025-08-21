@@ -221,7 +221,7 @@ class TDMPC2(torch.nn.Module):
 			actions[:, :, self.cfg.num_pi_trajs:] = actions_sample
 
 			# Compute elite actions
-			value = self._estimate_value(z, actions, task).nan_to_num(0)
+			value = self._estimate_value(z, actions, task, self.cfg.num_rollouts).nan_to_num(0)
 			elite_idxs = torch.topk(value.squeeze(2), self.cfg.num_elites, dim=1).indices
 			elite_value = torch.gather(value, 1, elite_idxs.unsqueeze(2))
 			elite_actions = torch.gather(actions, 2, elite_idxs.unsqueeze(1).unsqueeze(3).expand(-1, self.cfg.horizon, -1, self.cfg.action_dim))

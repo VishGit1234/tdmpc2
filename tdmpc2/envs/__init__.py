@@ -39,10 +39,10 @@ def make_multitask_env(cfg):
 	return env
 
 def wrap_env(cfg, env):
-	env = GaussianObsNoise(env, std=cfg.noise_std)  # Add Gaussian noise to observations
+	# env = GaussianObsNoise(env, std=cfg.noise_std)  # Add Gaussian noise to observations
 	env = FrameStack(env, num_stack=cfg.obs_buffer_size)
 	env = ClipAction(env)  # Scale down the action space
-	env = RepeatAction(env, num_repeats=cfg.action_repeat, scale_factor=cfg.action_scale)  # Repeat actions
+	env = RepeatAction(env, num_repeats=cfg.action_repeat, scale_factor=cfg.action_scale, action_noise=cfg.action_noise)  # Repeat actions
 	return env
 
 def make_env(cfg):

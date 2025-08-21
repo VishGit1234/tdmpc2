@@ -16,10 +16,11 @@ push_goal_radius: 0.05
 pick_goal_radius: 0.05
 push_target_offset: [0., 0.2]
 pick_target_offset: [0., 0., 0.2]
-episode_length: 100 # number of control steps
+episode_length: 150 # number of control steps
 action_scale: 0.2
 action_repeat: 1
 noise_std: 0.005
+action_noise: 0.2
 control_freq: 20 # Hz
 cube_randomization_ranges:
   size: [[0.04, 0.04, 0.04], [0.06, 0.06, 0.06]]
@@ -31,10 +32,10 @@ cube_randomization_ranges:
 # evaluation
 checkpoint: ???
 eval_episodes: 30 # should be 3x num_eval_envs
-eval_freq: 40_960 # must be a multiple of num_envs
+eval_freq: 163_840 # must be a multiple of num_envs
 
 # training
-steps: 327680 # should be multiple of num_envs
+steps: 655_360 # should be multiple of num_envs
 batch_size: 1024
 steps_per_update: 2 # should be a divisor of num_envs
 reward_coef: 0.1
@@ -60,7 +61,8 @@ iterations: 6
 num_samples: 512
 num_elites: 64
 num_pi_trajs: 24
-horizon: 3
+num_rollouts: 24
+horizon: 5
 min_std: 0.05
 max_std: 2
 temperature: 0.5
