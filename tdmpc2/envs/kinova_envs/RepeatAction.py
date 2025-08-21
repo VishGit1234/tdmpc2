@@ -13,10 +13,10 @@ class RepeatAction(gym.Wrapper):
     self.observation_space = env.observation_space
     self.frames = []
     self.is_rendered = False
-    self.action_noise = action_noise
+    self.action_noise = action_noise # action scale will be +/- action_noise
 
   def reset(self, **kwargs):
-    self.scale_factor = self.original_scale_factor + self.action_noise * (random() - 0.5)
+    self.scale_factor = self.original_scale_factor + 2 * self.action_noise * (random() - 0.5)
     return self.env.reset(**kwargs)
     
   def step(self, action):
