@@ -174,11 +174,14 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 			# agent=self._get_obs_agent(),
 			extra=self._get_obs_extra(info),
 		)
+	
+	def get_gripper_state(self):
+		return self.agent.robot.joints_map["left_outer_knuckle_joint"].qpos
 
 	def _get_obs_extra(self, info: dict):
 		obs = dict(
 			tcp_pose=self.agent.tcp.pose.p,
-			gripper_state=self.agent.robot.get_qpos()[..., 7]/0.821,
+			gripper_state=torch.clamp(self.get_gripper_state()/0.8178, min=0.0, max=1.0),  # normalize gripper state to [0, 1]
 			is_cubeA_grasped=info["is_cubeA_grasped"],
 		)
 		if "state" in self.obs_mode:

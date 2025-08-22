@@ -9,7 +9,7 @@ from mani_skill.utils.building import actors
 from mani_skill.utils.registration import register_env
 from mani_skill.utils.structs import Pose
 
-@register_env("KinovaPickCube", max_episode_steps=150)
+@register_env("KinovaPickCube", max_episode_steps=1000)
 class KinovaPickCubeEnv(KinovaBaseEnv):
 	def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
 		self.target_offset = kwargs["target_offset"]

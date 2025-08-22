@@ -4,32 +4,41 @@ from random import random
 
 class RepeatAction(gym.Wrapper):
   """Wrapper that repeats the action for a specified number of steps."""
-  def __init__(self, env, scale_factor=0.05, num_repeats=50, action_noise=0.2):
+  def __init__(self, env, max_repeats=50, episode_length=20):
     super().__init__(env)
-    self.num_repeats = num_repeats
-    self.original_scale_factor = scale_factor
-    self.scale_factor = scale_factor
+    self.max_repeats = max_repeats
     self.action_space = env.action_space
     self.observation_space = env.observation_space
     self.frames = []
-    self.is_rendered = False
-    self.action_noise = action_noise # action scale will be +/- action_noise
+    self._is_rendered = False
+    self.episode_length = episode_length
+    self.step_count = 0
+
+  def set_rendered(self, value):
+    self._is_rendered = value
+
+  def get_rendered(self):
+    return self._is_rendered
 
   def reset(self, **kwargs):
-    self.scale_factor = self.original_scale_factor + 2 * self.action_noise * (random() - 0.5)
+    self.step_count = 0
+    self.frames = []
     return self.env.reset(**kwargs)
-    
+
   def step(self, action):
-    action = action * self.scale_factor
     done = False
     self.frames = []
-    for _ in range(self.num_repeats):
+    target_pos = action[:, :4].clone()
+    for i in range(self.max_repeats):
       obs, reward, terminated, truncated, info = self.env.step(action)
+      terminated = torch.ones_like(terminated)*(self.step_count >= self.episode_length)
       done = terminated | truncated
-      if self.is_rendered:
+      if self._is_rendered:
         self.frames.append(self.env.render())  # Render the environment
-      if torch.any(done):
+      # Stop the gripper if the gripper target is reached
+      if torch.any(done) or torch.all(torch.norm(obs[:, :4] - target_pos, dim=1) < 0.01):
         break
+    self.step_count += 1
     return obs, reward, terminated, truncated, info
   
   def render(self):

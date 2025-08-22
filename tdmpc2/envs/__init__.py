@@ -7,7 +7,7 @@ from envs.wrappers.multitask import MultitaskWrapper
 from envs.wrappers.tensor import TensorWrapper
 from envs.wrappers.frame_stack import FrameStack
 from envs.wrappers.gaussian_noise import GaussianObsNoise
-from envs.kinova_envs.ClipAction import ClipAction
+from envs.kinova_envs.TranslateAction import TranslateAction
 from envs.kinova_envs.RepeatAction import RepeatAction
 
 def missing_dependencies(task):
@@ -41,8 +41,8 @@ def make_multitask_env(cfg):
 def wrap_env(cfg, env):
 	env = GaussianObsNoise(env, std=cfg.noise_std)  # Add Gaussian noise to observations
 	env = FrameStack(env, num_stack=cfg.obs_buffer_size)
-	env = ClipAction(env)  # Scale down the action space
-	env = RepeatAction(env, num_repeats=cfg.action_repeat, scale_factor=cfg.action_scale, action_noise=cfg.action_noise)  # Repeat actions
+	env = RepeatAction(env, max_repeats=cfg.max_repeats, episode_length=cfg.episode_length)
+	env = TranslateAction(env, action_scale=cfg.action_scale)
 	return env
 
 def make_env(cfg):

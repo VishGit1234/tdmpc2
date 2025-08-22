@@ -7,7 +7,7 @@ obs: state
 episodic: false
 num_envs: 128
 num_eval_envs: 10
-obs_buffer_size: 2
+obs_buffer_size: 3
 cubeA_init_pos: [-0.3, 0.2]
 cubeA_gen_range: [0.1, 0.1]
 cubeB_offset: [0.15, 0.15]
@@ -16,11 +16,11 @@ push_goal_radius: 0.05
 pick_goal_radius: 0.05
 push_target_offset: [0., 0.2]
 pick_target_offset: [0., 0., 0.2]
-episode_length: 150 # number of control steps
-action_scale: 0.2
-action_repeat: 1
+episode_length: 30 # number of control steps
+action_scale: 0.05
+max_repeats: 20
 noise_std: 0.005
-action_noise: 0.15
+# action_noise: 0.1
 control_freq: 20 # Hz
 cube_randomization_ranges:
   size: [[0.04, 0.04, 0.04], [0.06, 0.06, 0.06]]
@@ -30,14 +30,14 @@ cube_randomization_ranges:
   mass: [0.02, 0.06]
 
 # evaluation
-checkpoint: ???
+checkpoint: /home/vishal/Documents/tdmpc2/tdmpc2/logs/kinova_pick_cube/3/default/models/step_615040.pt
 eval_episodes: 30 # should be 3x num_eval_envs
-eval_freq: 163_840 # must be a multiple of num_envs
+eval_freq: 40_960 # must be a multiple of num_envs
 
 # training
 steps: 655_360 # should be multiple of num_envs
 batch_size: 1024
-steps_per_update: 2 # should be a divisor of num_envs
+steps_per_update: 1 # should be a divisor of num_envs
 reward_coef: 0.1
 value_coef: 0.1
 termination_coef: 1
@@ -50,7 +50,7 @@ tau: 0.01
 discount_denom: 5
 discount_min: 0.95
 discount_max: 0.995
-buffer_size: 81_920 # should be multiple of num_envs
+buffer_size: 20_480 # should be multiple of num_envs
 exp_name: default
 data_dir: ???
 cuda_device: 0

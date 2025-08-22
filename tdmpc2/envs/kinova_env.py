@@ -14,7 +14,7 @@ def make_env(cfg):
   general_kwargs = {
     "control_freq": cfg.control_freq,
     "render_mode": "rgb_array",
-    "control_mode": "pd_ee_delta_pose",
+    "control_mode": "pd_ee_pose",
     # Initial positions and generation ranges for cubes
     "cubeA_init_pos": cfg.cubeA_init_pos,
     "cubeA_gen_range": cfg.cubeA_gen_range,

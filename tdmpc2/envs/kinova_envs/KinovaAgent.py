@@ -6,7 +6,7 @@ import torch
 
 from mani_skill.agents.base_agent import BaseAgent, DictControllerConfig, Keyframe
 # from mani_skill.agents.controllers import *
-from mani_skill.agents.controllers import PDJointPosControllerConfig, PDEEPoseControllerConfig, PDJointPosMimicControllerConfig, PassiveControllerConfig
+from mani_skill.agents.controllers import PDJointPosControllerConfig, PDEEPoseControllerConfig, PDJointPosMimicControllerConfig, PassiveControllerConfig, PDEEPosControllerConfig
 from mani_skill.agents.controllers.base_controller import ControllerConfig
 from mani_skill.agents.registration import register_agent
 from mani_skill.utils import common, sapien_utils
@@ -97,16 +97,15 @@ class KinovaGen3(BaseAgent):
     ## Non-delta ee pose controller
     arm_pd_ee_pose = PDEEPoseControllerConfig(
       joint_names=self.arm_joint_names,
-      pos_lower=-0.1,
-      pos_upper=0.1,
-      rot_lower=-0.1,
-      rot_upper=0.1,
+      pos_lower=None,
+      pos_upper=None,
       stiffness=self.arm_stiffness,
       damping=self.arm_damping,
       force_limit=self.arm_force_limit,
       ee_link=self.ee_link_name,
       urdf_path=self.urdf_path,
       use_delta=False,
+      normalize_action=False,
     )
     # define a passive controller config to simply "turn off" other joints from being controlled and set their properties (damping/friction) to 0.
     # these joints are controlled passively by the mimic controller later on.
