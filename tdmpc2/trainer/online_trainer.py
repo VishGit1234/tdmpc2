@@ -28,7 +28,7 @@ class OnlineTrainer(Trainer):
 
 	def eval(self):
 		"""Evaluate a TD-MPC2 agent."""
-		self.eval_env.set_rendered(True)  # Enable rendering in RepeatAction wrapper
+		# self.eval_env.set_rendered(True)  # Enable rendering in RepeatAction wrapper
 		self.agent.eval_mode = True
 		ep_rewards = [[] for _ in self.cfg.tasks]
 		ep_successes = [[] for _ in self.cfg.tasks]
@@ -60,7 +60,7 @@ class OnlineTrainer(Trainer):
 			ep_lengths[task_idx].append(t)
 			if self.cfg.save_video:
 				self.logger.video.save(self._step, key=f"videos/eval_video_{get_task(task_idx)}")
-		self.eval_env.set_rendered(False)
+		# self.eval_env.set_rendered(False)
 		self.agent.eval_mode = False
 		eval_info = {f"episode_rewards_{get_task(i)}": torch.cat(v).mean().cpu() for i, v in enumerate(ep_rewards)}
 		eval_info.update({f"episode_successes_{get_task(i)}": 100*torch.cat(v).float().mean().cpu() for i, v in enumerate(ep_successes)})
@@ -93,7 +93,7 @@ class OnlineTrainer(Trainer):
 
 	def train(self):
 		"""Train a TD-MPC2 agent."""
-		train_metrics, done, eval_next = {}, torch.tensor(True), True
+		train_metrics, done, eval_next = {}, torch.tensor(True), False
 		while self._step <= self.cfg.steps:
 			# Evaluate agent periodically
 			if self._step % self.cfg.eval_freq == 0 and self._step > 0:
@@ -139,10 +139,10 @@ class OnlineTrainer(Trainer):
 			# Update agent
 			if self._step >= self.cfg.seed_steps:
 				if self._step == self.cfg.seed_steps:
-					num_updates = int(self.cfg.seed_steps / self.cfg.steps_per_update)
+					num_updates = self.cfg.num_seed_step_updates
 					print('Pretraining agent on seed data...')
 				else:
-					num_updates = max(1, int(self.cfg.num_envs / self.cfg.steps_per_update))
+					num_updates = self.cfg.num_updates
 				for _ in range(num_updates):
 					if self.cfg.multitask:
 						_train_metrics = self.agent.update(self.buffer, task=self.env.task_idx)

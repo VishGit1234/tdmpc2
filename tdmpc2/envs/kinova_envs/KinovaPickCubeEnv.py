@@ -9,7 +9,7 @@ from mani_skill.utils.building import actors
 from mani_skill.utils.registration import register_env
 from mani_skill.utils.structs import Pose
 
-@register_env("KinovaPickCube", max_episode_steps=1000)
+@register_env("KinovaPickCube", max_episode_steps=15)
 class KinovaPickCubeEnv(KinovaBaseEnv):
 	def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
 		self.target_offset = kwargs["target_offset"]
@@ -67,9 +67,12 @@ class KinovaPickCubeEnv(KinovaBaseEnv):
 			torch.linalg.norm(self.goal_site.pose.p - self.cubeA.pose.p, axis=1)
 			<= self.goal_radius
 		)
+		# note the robot static check does not work for the gripper
+		is_robot_static = self.agent.is_static(1e-3)
 		info.update({
-			"_success": is_obj_placed,
+			"_success": is_obj_placed & is_robot_static & info["is_cubeA_grasped"],
 			"goal_pos": self.goal_site.pose.p,
+			"is_robot_static": is_robot_static,
 		})
 		return info
 

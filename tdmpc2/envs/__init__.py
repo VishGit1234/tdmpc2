@@ -39,10 +39,10 @@ def make_multitask_env(cfg):
 	return env
 
 def wrap_env(cfg, env):
-	env = GaussianObsNoise(env, std=cfg.noise_std)  # Add Gaussian noise to observations
-	env = FrameStack(env, num_stack=cfg.obs_buffer_size)
-	env = RepeatAction(env, max_repeats=cfg.max_repeats, episode_length=cfg.episode_length)
-	env = TranslateAction(env, action_scale=cfg.action_scale)
+	# env = GaussianObsNoise(env, std=cfg.noise_std)  # Add Gaussian noise to observations
+	# env = FrameStack(env, num_stack=cfg.obs_buffer_size)
+	# env = RepeatAction(env, max_repeats=cfg.max_repeats, episode_length=cfg.episode_length)
+	env = TranslateAction(env, action_scale=cfg.action_scale, gripper_scale=cfg.gripper_scale)
 	return env
 
 def make_env(cfg):
@@ -53,7 +53,6 @@ def make_env(cfg):
 	env = wrap_env(cfg, env)
 	cfg.obs_shape = {cfg.get('obs', 'state'): (env.observation_space.shape[1], )}
 	cfg.action_dim = env.action_space.shape[1]
-	cfg.seed_steps = max(1000, 5*cfg.episode_length) * cfg.num_envs
 	eval_env = wrap_env(cfg, eval_env)
 	return env, eval_env
 

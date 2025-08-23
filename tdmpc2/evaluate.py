@@ -100,7 +100,7 @@ def evaluate(cfg: dict):
 			ep_successes.append(info['_success'])
 			if cfg.save_video:
 				imageio.mimsave(
-					os.path.join(video_dir, f'{task}-{i}.mp4'), frames, fps=15)
+					os.path.join(video_dir, f'{task}-{i}.mp4'), frames, fps=2)
 		ep_rewards = torch.cat(ep_rewards).mean().cpu()
 		ep_successes = 100*torch.cat(ep_successes).float().mean().cpu()
 		if cfg.multitask:

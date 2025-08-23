@@ -78,7 +78,7 @@ def cfg_to_group(cfg, return_list=False):
 class VideoRecorder:
 	"""Utility class for logging evaluation videos."""
 
-	def __init__(self, cfg, wandb, fps=20):
+	def __init__(self, cfg, wandb, fps=2):
 		self.cfg = cfg
 		self._save_dir = make_dir(cfg.work_dir / 'eval_video')
 		self._wandb = wandb

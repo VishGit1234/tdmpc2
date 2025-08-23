@@ -4,7 +4,7 @@ import gymnasium as gym
 # Translate Action from root frame to world frame
 # And convert action from relative to absolute
 class TranslateAction(gym.ActionWrapper):  
-	def __init__(self, env, action_scale=0.05):
+	def __init__(self, env, action_scale=0.05, gripper_scale=0.4):
 		super().__init__(env)
 		shape = list(self.env.action_space.shape)
 		shape[-1] = 4
@@ -16,7 +16,7 @@ class TranslateAction(gym.ActionWrapper):
 		)
 		self.root_pos = self.env.unwrapped.agent.robot.get_root().pose.p.clone()
 		self.action_scale = action_scale
-		self.gripper_scale = 0.4
+		self.gripper_scale = gripper_scale
 		self.x_limits=[-0.4, 0.1]
 		self.y_limits=[-0.6, 0.6]
 		self.z_limits=[0.01, 0.6]
