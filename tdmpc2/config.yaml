@@ -2,24 +2,29 @@ defaults:
     - override hydra/launcher: submitit_local
 
 # environment
-task: kinova_push_cube
+task: kinova_pick_cube
 obs: state
 episodic: false
-num_envs: 128
+num_envs: 1024
 num_eval_envs: 10
-obs_buffer_size: 4
-init_box_pos: [-0.3, 0.2]
-box_gen_range: [0.1, 0.1]
-termination_if_cube_goal_dist_less_than: 0.05
+# obs_buffer_size: 3
+cubeA_init_pos: [-0.3, 0.2]
+cubeA_gen_range: [0.2, 0.2]
+cubeB_offset: [0.2, 0.2]
+cubeB_gen_range: [0.2, 0.2]
+push_goal_radius: 0.05
+pick_goal_radius: 0.05
 push_target_offset: [0., 0.2]
 pick_target_offset: [0., 0., 0.2]
-stack_target_offset: [0.2, 0.2]
-episode_length: 20 # number of control steps
-action_scale: 0.2
-action_repeat: 10
-obs_noise_std: 0.005
+episode_length: 15 # number of control steps
+action_scale: 0.05
+gripper_scale: 0.4
+# max_repeats: 20
+noise_std: 0.01
+# action_noise: 0.1
+control_freq: 2 # Hz
 cube_randomization_ranges:
-  size: [[0.04, 0.04, 0.04], [0.06, 0.06, 0.06]]
+  size: [[0.045, 0.045, 0.045], [0.055, 0.055, 0.055]]
   dynamic_friction: [0.3, 0.4]
   static_friction: [0.3, 0.4]
   restitution: [0.1, 0.3]
@@ -27,26 +32,28 @@ cube_randomization_ranges:
 
 # evaluation
 checkpoint: ???
-eval_episodes: 128 # must be multiple of num_envs
-eval_freq: 64_000 # must be a multiple of num_envs
+eval_episodes: 30 # should be 3x num_eval_envs
+eval_freq: 163_840 # must be a multiple of num_envs
 
 # training
-steps: 1_280_000 # should be multiple of num_envs
-batch_size: 1024
-steps_per_update: 8 # should be a divisor of num_envs
+steps: 1_310_720 # should be multiple of num_envs
+num_updates: 32
+seed_steps: 163_840 # should be multiple of num_envs
+num_seed_step_updates: 1024
+batch_size: 8192
 reward_coef: 0.1
 value_coef: 0.1
 termination_coef: 1
 consistency_coef: 20
 rho: 0.5
-lr: 3e-4
+lr: 6e-4
 enc_lr_scale: 0.3
 grad_clip_norm: 20
 tau: 0.01
 discount_denom: 5
 discount_min: 0.95
 discount_max: 0.995
-buffer_size: 199_936 # should be multiple of num_envs
+buffer_size: 327_680 # should be multiple of num_envs
 exp_name: default
 data_dir: ???
 cuda_device: 0
@@ -57,7 +64,8 @@ iterations: 6
 num_samples: 512
 num_elites: 64
 num_pi_trajs: 24
-horizon: 3
+num_rollouts: 24
+horizon: 5
 min_std: 0.05
 max_std: 2
 temperature: 0.5
@@ -76,11 +84,11 @@ vmax: +10
 use_stochastic_dynamics: false
 model_size: ??? # preset config, below ignored
 num_enc_layers: 2
-enc_dim: 48
+enc_dim: 24
 num_channels: 32
-mlp_dim: 48
-latent_dim: 32
-task_dim: 96
+mlp_dim: 96
+latent_dim: 16
+task_dim: 8
 num_q: 2
 dropout: 0.01
 simnorm_dim: 8
@@ -96,7 +104,7 @@ save_csv: false
 compile: false
 save_video: true
 save_agent: true
-seed: 2
+seed: 4
 
 # convenience
 work_dir: ???
@@ -108,5 +116,5 @@ action_dim: ???
 obs_shapes: ???
 action_dims: ???
 episode_lengths: ???
-seed_steps: ???
+# seed_steps: ???
 bin_size: ???

@@ -20,7 +20,7 @@ class Buffer():
 			traj_key='episode',
 			truncated_key=None,
 			strict_length=True,
-			cache_values=cfg.multitask,
+			cache_values=False,
 		)
 		self._batch_size = cfg.batch_size * (cfg.horizon+1)
 		self._num_eps = 0

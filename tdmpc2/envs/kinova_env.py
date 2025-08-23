@@ -1,6 +1,7 @@
 from envs.kinova_envs import SUPPORTED_TASKS
-from envs.kinova_envs.ScaleAction import ScaleAction
 import gymnasium as gym
+
+from envs.kinova_envs.KinovaMultitaskEnv import KinovaMultitaskEnv
 
 def make_env(cfg):
   """
@@ -8,37 +9,45 @@ def make_env(cfg):
   """
   if cfg.task not in SUPPORTED_TASKS:
     raise ValueError('Unknown task:', cfg.task)
-  kwargs = {}
-  if cfg.task == 'kinova_push_cube' or cfg.task == 'kinova_pick_cube' or cfg.task == 'kinova_stack_cube':
+
+  # Environment options that are common across tasks
+  general_kwargs = {
+    "control_freq": cfg.control_freq,
+    "render_mode": "rgb_array",
+    "control_mode": "pd_ee_pose",
+    # Initial positions and generation ranges for cubeA
+    "cubeA_init_pos": cfg.cubeA_init_pos,
+    "cubeA_gen_range": cfg.cubeA_gen_range,
+    # Cube randomization ranges
+    "cube_randomization_ranges": cfg.cube_randomization_ranges
+  }
+  
+  if cfg.task == "kinova_multitask":
+    push_cube_kwargs = dict(general_kwargs, target_offset=cfg.push_target_offset, goal_radius=cfg.push_goal_radius)
+    pick_cube_kwargs = dict(general_kwargs, target_offset=cfg.pick_target_offset, goal_radius=cfg.pick_goal_radius)
+    stack_cube_kwargs = dict(general_kwargs, cubeB_offset=cfg.cubeB_offset, cubeB_gen_range=cfg.cubeB_gen_range)
+    kwargs = {
+      "push_cube_kwargs": push_cube_kwargs,
+      "pick_cube_kwargs": pick_cube_kwargs,
+      "stack_cube_kwargs": stack_cube_kwargs
+    }
+    env = KinovaMultitaskEnv(num_envs = cfg.num_envs, **kwargs)
+    eval_kwargs = {
+      "push_cube_kwargs": push_cube_kwargs,
+      "pick_cube_kwargs": pick_cube_kwargs,
+      "stack_cube_kwargs": stack_cube_kwargs,
+    }
+    eval_env = KinovaMultitaskEnv(num_envs = cfg.num_eval_envs, **eval_kwargs)
+  else:
     if cfg.task == 'kinova_push_cube':
       task_name = "KinovaPushCube"
-      target_offset = cfg.push_target_offset
+      kwargs = dict(general_kwargs, target_offset=cfg.push_target_offset, goal_radius=cfg.push_goal_radius)
     elif cfg.task == 'kinova_pick_cube':
       task_name = "KinovaPickCube"
-      target_offset = cfg.pick_target_offset
+      kwargs = dict(general_kwargs, target_offset=cfg.pick_target_offset, goal_radius=cfg.pick_goal_radius)
     elif cfg.task == 'kinova_stack_cube':
       task_name = "KinovaStackCube"
-      target_offset = cfg.stack_target_offset
-    # Init kwargs dict
-    kwargs = {
-      "block_offset": cfg.init_box_pos,
-      "block_gen_range": cfg.box_gen_range,
-      "target_offset": target_offset,
-      "goal_radius": cfg.termination_if_cube_goal_dist_less_than,
-      "cube_randomization_ranges": cfg.cube_randomization_ranges,
-    }
-    env = gym.make(
-      task_name,
-      num_envs=cfg.num_envs,
-      render_mode="rgb_array",
-      control_mode="pd_ee_delta_pose",
-      **kwargs
-    )
-    eval_env = gym.make(
-      task_name,
-      num_envs=cfg.num_eval_envs,
-      render_mode="rgb_array",
-      control_mode="pd_ee_delta_pose",
-      **kwargs
-    )
+    env = gym.make(task_name, num_envs = cfg.num_envs, **kwargs)
+    eval_env = gym.make(task_name, num_envs = cfg.num_eval_envs, **kwargs)
+
   return env, eval_env

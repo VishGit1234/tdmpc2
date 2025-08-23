@@ -2,7 +2,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 
-class GaussianObsNoise(gym.ObservationWrapper):
+class GaussianObsNoise(gym.ObservationWrapper, gym.ActionWrapper):
   """
   Adds Gaussian noise to observations.
   """

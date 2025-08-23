@@ -20,14 +20,11 @@ class WorldModel(nn.Module):
 		self.cfg = cfg
 		if cfg.multitask:
 			self._task_emb = nn.Embedding(len(cfg.tasks), cfg.task_dim, max_norm=1)
-			self.register_buffer("_action_masks", torch.zeros(len(cfg.tasks), cfg.action_dim))
-			for i in range(len(cfg.tasks)):
-				self._action_masks[i, :cfg.action_dims[i]] = 1.
 		self._encoder = layers.enc(cfg)
 		if cfg.use_stochastic_dynamics:
-			self._dynamics = layers.mlp(cfg.latent_dim + cfg.action_dim + cfg.task_dim, 2*[cfg.mlp_dim], 2*cfg.latent_dim, act=layers.SimNorm(cfg))
+			self._dynamics = layers.mlp(cfg.latent_dim + cfg.action_dim, 2*[cfg.mlp_dim], 2*cfg.latent_dim, act=layers.SimNorm(cfg))
 		else:
-			self._dynamics = layers.mlp(cfg.latent_dim + cfg.action_dim + cfg.task_dim, 2*[cfg.mlp_dim], cfg.latent_dim, act=layers.SimNorm(cfg))
+			self._dynamics = layers.mlp(cfg.latent_dim + cfg.action_dim, 2*[cfg.mlp_dim], cfg.latent_dim, act=layers.SimNorm(cfg))
 		self._reward = layers.mlp(cfg.latent_dim + cfg.action_dim + cfg.task_dim, 2*[cfg.mlp_dim], max(cfg.num_bins, 1))
 		self._termination = layers.mlp(cfg.latent_dim + cfg.task_dim, 2*[cfg.mlp_dim], 1) if cfg.episodic else None
 		self._pi = layers.mlp(cfg.latent_dim + cfg.task_dim, 2*[cfg.mlp_dim], 2*cfg.action_dim)
@@ -99,7 +96,7 @@ class WorldModel(nn.Module):
 			task = torch.tensor([task], device=x.device)
 		emb = self._task_emb(task.long())
 		if x.ndim == 3:
-			emb = emb.unsqueeze(0).repeat(x.shape[0], 1, 1)
+			emb = emb.unsqueeze(0).repeat(x.shape[0], x.shape[1], 1)
 		elif emb.shape[0] == 1:
 			emb = emb.repeat(x.shape[0], 1)
 		return torch.cat([x, emb], dim=-1)
@@ -109,24 +106,19 @@ class WorldModel(nn.Module):
 		Encodes an observation into its latent representation.
 		This implementation assumes a single state-based observation.
 		"""
-		if self.cfg.multitask:
-			obs = self.task_emb(obs, task)
-		if self.cfg.obs == 'rgb' and obs.ndim == 5:
-			return torch.stack([self._encoder[self.cfg.obs](o) for o in obs])
+		if self.cfg.obs == 'rgb' and obs.ndim == 5: # not sure what this is for
+			return torch.stack([self._encoder[self.cfg.obs](o) for o in obs]) # not sure what this is for
 		return self._encoder[self.cfg.obs](obs)
 
 	def next(self, z, a, task, return_info=False):
 		"""
 		Predicts the next latent state given the current latent state and action.
 		"""
-		if self.cfg.multitask:
-			z = self.task_emb(z, task)
 		z = torch.cat([z, a], dim=-1)
 		if self.cfg.use_stochastic_dynamics:
 			mean, std_param = self._dynamics(z).chunk(2, dim=-1)
 			std = F.softplus(std_param) + 1e-6  # Ensure std is positive
 			z_next = mean + torch.randn_like(mean) * std
-			# print("z_std", std[0].mean().item(), std[0].std().item(), "z_mean", mean[0].mean().item(), mean[0].std().item(), "z_next", z_next[0].mean().item(), z_next[0].std().item())
 			if return_info:
 				info = {
 					"mean": mean,
@@ -173,14 +165,9 @@ class WorldModel(nn.Module):
 		mean, log_std = self._pi(z).chunk(2, dim=-1)
 		log_std = math.log_std(log_std, self.log_std_min, self.log_std_dif)
 		eps = torch.randn_like(mean)
-
-		if self.cfg.multitask: # Mask out unused action dimensions
-			mean = mean * self._action_masks[task]
-			log_std = log_std * self._action_masks[task]
-			eps = eps * self._action_masks[task]
-			action_dims = self._action_masks.sum(-1)[task].unsqueeze(-1)
-		else: # No masking
-			action_dims = None
+		
+		# no action masking
+		action_dims = None
 
 		log_prob = math.gaussian_logprob(eps, log_std)
 

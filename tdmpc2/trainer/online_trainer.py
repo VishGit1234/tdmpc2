@@ -28,20 +28,25 @@ class OnlineTrainer(Trainer):
 
 	def eval(self):
 		"""Evaluate a TD-MPC2 agent."""
-		if hasattr(self.eval_env, 'is_rendered'):
-			self.eval_env.is_rendered = True
+		# self.eval_env.set_rendered(True)  # Enable rendering in RepeatAction wrapper
 		self.agent.eval_mode = True
-		ep_rewards, ep_successes, ep_lengths = [], [], []
+		ep_rewards = [[] for _ in self.cfg.tasks]
+		ep_successes = [[] for _ in self.cfg.tasks]
+		ep_lengths = [[] for _ in self.cfg.tasks]
+		get_task = lambda i: self.eval_env.get_task(i) if self.cfg.multitask else self.cfg.task
 		for i in range(self.cfg.eval_episodes // self.cfg.num_eval_envs):
 			obs, _ = self.eval_env.reset()
 			done = torch.tensor(False)
 			ep_reward = torch.zeros(self.cfg.num_eval_envs, device=self.eval_env.get_wrapper_attr('device'))
 			t = 0
 			if self.cfg.save_video:
-				self.logger.video.init(self.eval_env, enabled=(i==0))
+				self.logger.video.init(self.eval_env, enabled=(i < len(self.cfg.tasks)))
 			while not done.any():
 				torch.compiler.cudagraph_mark_step_begin()
-				action = self.agent.act(obs.to(self.cfg.cuda_device), t0=t==0, eval_mode=True)
+				if self.cfg.multitask:
+					action = self.agent.act(obs.to(self.cfg.cuda_device), t0=t==0, task=self.eval_env.task_idx)
+				else:
+					action = self.agent.act(obs.to(self.cfg.cuda_device), t0=t==0)
 				obs, reward, terminated, truncated, info = self.eval_env.step(action)
 				done = terminated | truncated
 				ep_reward += reward
@@ -49,20 +54,23 @@ class OnlineTrainer(Trainer):
 				if self.cfg.save_video:
 					self.logger.video.record(self.eval_env)
 			assert done.all(), 'Vectorized environments must reset all environments at once.'
-			ep_rewards.append(ep_reward)
-			ep_successes.append(info['_success'])
-			ep_lengths.append(t)
+			task_idx = 0 if not self.cfg.multitask else self.eval_env.task_idx
+			ep_rewards[task_idx].append(ep_reward)
+			ep_successes[task_idx].append(info['_success'])
+			ep_lengths[task_idx].append(t)
 			if self.cfg.save_video:
-				self.logger.video.save(self._step)
-		if hasattr(self.env, 'is_rendered'):
-			self.env.is_rendered = False
+				self.logger.video.save(self._step, key=f"videos/eval_video_{get_task(task_idx)}")
+		# self.eval_env.set_rendered(False)
 		self.agent.eval_mode = False
-		return dict(
-			episode_reward=torch.cat(ep_rewards).mean().cpu(),
-			episode_success=100*torch.cat(ep_successes).float().mean().cpu(),
-			episode_length=np.nanmean(ep_lengths),
-		)
-	
+		eval_info = {f"episode_rewards_{get_task(i)}": torch.cat(v).mean().cpu() for i, v in enumerate(ep_rewards)}
+		eval_info.update({f"episode_successes_{get_task(i)}": 100*torch.cat(v).float().mean().cpu() for i, v in enumerate(ep_successes)})
+		eval_info.update({f"episode_lengths_{get_task(i)}": np.nanmean(v) for i, v in enumerate(ep_lengths)})
+		try:
+			self.logger.save_agent(self.agent, identifier=f"step_{self._step}")
+		except Exception as e:
+			pass
+		return eval_info
+
 	def to_td(self, obs, action=None, reward=None, terminated=None):
 		"""Creates a TensorDict for a new episode."""
 		if isinstance(obs, dict):
@@ -118,7 +126,10 @@ class OnlineTrainer(Trainer):
 
 			# Collect experience
 			if self._step > self.cfg.seed_steps:
-				action = self.agent.act(obs.to(self.cfg.cuda_device), t0=len(self._tds)==1)
+				if self.cfg.multitask:
+					action = self.agent.act(obs.to(self.cfg.cuda_device), t0=len(self._tds)==1, task=self.env.task_idx)
+				else:
+					action = self.agent.act(obs.to(self.cfg.cuda_device), t0=len(self._tds)==1)
 			else:
 				action = torch.from_numpy(self.env.action_space.sample()).to(self.cfg.cuda_device)
 			obs, reward, terminated, truncated, info = self.env.step(action)
@@ -128,12 +139,15 @@ class OnlineTrainer(Trainer):
 			# Update agent
 			if self._step >= self.cfg.seed_steps:
 				if self._step == self.cfg.seed_steps:
-					num_updates = int(self.cfg.seed_steps / self.cfg.steps_per_update)
+					num_updates = self.cfg.num_seed_step_updates
 					print('Pretraining agent on seed data...')
 				else:
-					num_updates = max(1, int(self.cfg.num_envs / self.cfg.steps_per_update))
+					num_updates = self.cfg.num_updates
 				for _ in range(num_updates):
-					_train_metrics = self.agent.update(self.buffer)
+					if self.cfg.multitask:
+						_train_metrics = self.agent.update(self.buffer, task=self.env.task_idx)
+					else:
+						_train_metrics = self.agent.update(self.buffer)
 				train_metrics.update(_train_metrics)
 
 			self._step += self.cfg.num_envs
