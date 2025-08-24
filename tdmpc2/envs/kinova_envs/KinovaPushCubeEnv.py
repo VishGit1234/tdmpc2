@@ -54,6 +54,11 @@ class KinovaPushCubeEnv(KinovaBaseEnv):
 					q=euler2quat(0, np.pi / 2, 0),
 				)
 			)
+			
+	def _get_obs_extra(self, info: dict):
+		obs = super()._get_obs_extra(info)
+		obs["goal_pose"] = info["goal_pos"]
+		return obs
 
 	def evaluate(self):
 		info = super().evaluate()

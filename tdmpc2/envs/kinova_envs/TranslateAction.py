@@ -17,7 +17,7 @@ class TranslateAction(gym.ActionWrapper):
 		self.root_pos = self.env.unwrapped.agent.robot.get_root().pose.p.clone()
 		self.action_scale = action_scale
 		self.gripper_scale = gripper_scale
-		self.x_limits=[-0.4, 0.1]
+		self.x_limits=[-0.7, 0.1]
 		self.y_limits=[-0.6, 0.6]
 		self.z_limits=[0.01, 0.6]
 

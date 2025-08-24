@@ -60,6 +60,11 @@ class KinovaPickCubeEnv(KinovaBaseEnv):
 			)
 			# store initial block position for computing rewards
 			self.initial_block_pos = self.cubeA.pose.p.clone()
+			
+	def _get_obs_extra(self, info: dict):
+		obs = super()._get_obs_extra(info)
+		obs["goal_pose"] = info["goal_pos"]
+		return obs
 
 	def evaluate(self):
 		info = super().evaluate()
@@ -67,12 +72,9 @@ class KinovaPickCubeEnv(KinovaBaseEnv):
 			torch.linalg.norm(self.goal_site.pose.p - self.cubeA.pose.p, axis=1)
 			<= self.goal_radius
 		)
-		# note the robot static check does not work for the gripper
-		is_robot_static = self.agent.is_static(1e-3)
 		info.update({
-			"_success": is_obj_placed & is_robot_static & info["is_cubeA_grasped"],
+			"_success": is_obj_placed & info["is_cubeA_grasped"],
 			"goal_pos": self.goal_site.pose.p,
-			"is_robot_static": is_robot_static,
 		})
 		return info
 

@@ -132,11 +132,9 @@ class KinovaStackCubeEnv(KinovaBaseEnv):
 		reward[info["is_cubeA_grasped"]] = (4 + place_reward)[info["is_cubeA_grasped"]]
 
 		# ungrasp reward
-		gripper_width = 0.821
+		gripper_width = 0.8178
 		is_cubeA_grasped = info["is_cubeA_grasped"]
-		ungrasp_reward = 1 - (
-			self.agent.robot.get_qpos()[:, 7] / gripper_width
-		)
+		ungrasp_reward = 1 - self.get_gripper_state()/gripper_width
 		ungrasp_reward[~is_cubeA_grasped] = 1.0
 		reward[info["is_cubeA_on_cubeB"]] = (
 			6 + ungrasp_reward

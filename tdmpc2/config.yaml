@@ -2,16 +2,16 @@ defaults:
     - override hydra/launcher: submitit_local
 
 # environment
-task: kinova_pick_cube
+task: kinova_stack_cube
 obs: state
 episodic: false
 num_envs: 1024
-num_eval_envs: 10
+num_eval_envs: 32
 # obs_buffer_size: 3
-cubeA_init_pos: [-0.3, 0.2]
+cubeA_init_pos: [-0.3, 0.1]
 cubeA_gen_range: [0.2, 0.2]
-cubeB_offset: [0.2, 0.2]
-cubeB_gen_range: [0.2, 0.2]
+cubeB_offset: [-0.1, 0.15]
+cubeB_gen_range: [0.2, 0.1]
 push_goal_radius: 0.05
 pick_goal_radius: 0.05
 push_target_offset: [0., 0.2]
@@ -32,11 +32,11 @@ cube_randomization_ranges:
 
 # evaluation
 checkpoint: ???
-eval_episodes: 30 # should be 3x num_eval_envs
+eval_episodes: 96 # should be multiple of num_eval_envs
 eval_freq: 163_840 # must be a multiple of num_envs
 
 # training
-steps: 1_310_720 # should be multiple of num_envs
+steps: 2_621_440 # should be multiple of num_envs
 num_updates: 32
 seed_steps: 163_840 # should be multiple of num_envs
 num_seed_step_updates: 1024
@@ -46,7 +46,7 @@ value_coef: 0.1
 termination_coef: 1
 consistency_coef: 20
 rho: 0.5
-lr: 6e-4
+lr: 3e-4
 enc_lr_scale: 0.3
 grad_clip_norm: 20
 tau: 0.01
