@@ -23,6 +23,7 @@ def make_env(cfg):
   }
   
   if cfg.task == "kinova_multitask":
+    general_kwargs["include_cubeB"] = True
     push_cube_kwargs = dict(general_kwargs, target_offset=cfg.push_target_offset, goal_radius=cfg.push_goal_radius)
     pick_cube_kwargs = dict(general_kwargs, target_offset=cfg.pick_target_offset, goal_radius=cfg.pick_goal_radius)
     stack_cube_kwargs = dict(general_kwargs, cubeB_offset=cfg.cubeB_offset, cubeB_gen_range=cfg.cubeB_gen_range)

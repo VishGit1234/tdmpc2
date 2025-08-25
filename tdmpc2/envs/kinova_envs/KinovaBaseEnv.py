@@ -30,13 +30,16 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 		self.static_friction_range = self.cube_rand_ranges["static_friction"]
 		self.restitution_range = self.cube_rand_ranges["restitution"]
 		self.mass_range = self.cube_rand_ranges["mass"]
+
+		self.include_cubeB = kwargs.get("include_cubeB", False)
 		
 		sim_config = SimConfig(control_freq=kwargs.get("control_freq", 2))
 
 		del kwargs["cubeA_init_pos"]
 		del kwargs["cubeA_gen_range"]
 		del kwargs["cube_randomization_ranges"]
-		del kwargs["control_freq"]
+		kwargs.pop("control_freq", None)
+		kwargs.pop("include_cubeB", None)
 		super().__init__(*args, robot_uids=robot_uids, sim_config=sim_config, **kwargs)
 
 	@property
@@ -107,6 +110,54 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 
 				min_restitution, max_restitution = self.restitution_range
 				shape.physical_material.restitution = torch.rand(1).item() * (max_restitution - min_restitution) + min_restitution
+		
+		# Add cubeB if the environment requires it
+		if self.include_cubeB:	
+			# create the cubeB box for the task (box that is stacked on)
+			cubeB_objects = []
+			self.cubeB_half_sizes = torch.zeros((self.num_envs, 3), device=self.device)
+			for i in range(self.num_envs):
+				# CubeB
+				builderB = self.scene.create_actor_builder()
+				cubeB_size = torch.rand(3) * (max_size - min_size) + min_size
+				cubeB_half_sizes = cubeB_size / 2
+				builderB.add_box_collision(half_size=cubeB_half_sizes)
+				builderB.set_scene_idxs([i])
+				builderB.add_box_visual(
+					half_size=cubeB_half_sizes,
+					material=sapien.render.RenderMaterial(
+						base_color=np.array([160, 12, 42, 255]) / 255
+					)
+				)
+				builderB.set_initial_pose(sapien.Pose(p=[1, 0, cubeB_half_sizes[2]]))
+				objB = builderB.build(name=f"cubeB_{i}")
+				self.remove_from_state_dict_registry(objB)
+				cubeB_objects.append(objB)
+				self.cubeB_half_sizes[i] = cubeB_half_sizes
+
+			self.cubeB = Actor.merge(cubeB_objects, name="cubeB")
+			self.add_to_state_dict_registry(self.cubeB)
+
+			# Randomize object physical and collision properties
+			for i, obj in enumerate(self.cubeB._objs):
+				# modify the i-th object which is in parallel environment i
+				rigid_body_component: PhysxRigidBodyComponent = obj.find_component_by_type(PhysxRigidBodyComponent)
+				if rigid_body_component is not None:
+					# note the use of _batched_episode_rng instead of torch.rand. _batched_episode_rng helps ensure reproducibility in parallel environments.
+					min_mass, max_mass = self.mass_range
+					rigid_body_component.mass = torch.rand(1).item() * (max_mass - min_mass) + min_mass
+
+				# modifying per collision shape properties such as friction values
+				rigid_base_component: PhysxRigidBaseComponent = obj.find_component_by_type(PhysxRigidBaseComponent)
+				for shape in rigid_base_component.collision_shapes:
+					min_dyn_fric, max_dyn_fric = self.dynamic_friction_range
+					shape.physical_material.dynamic_friction = torch.rand(1).item() * (max_dyn_fric - min_dyn_fric) + min_dyn_fric
+
+					min_static_fric, max_static_fric = self.static_friction_range
+					shape.physical_material.static_friction = torch.rand(1).item() * (max_static_fric - min_static_fric) + min_static_fric
+
+					min_restitution, max_restitution = self.restitution_range
+					shape.physical_material.restitution = torch.rand(1).item() * (max_restitution - min_restitution) + min_restitution
 
 	def _initialize_episode(self, env_idx: torch.Tensor, options: dict):
 		# use the torch.device context manager to automatically create tensors on CPU or CUDA depending on self.device, the device the environment runs on
@@ -124,11 +175,20 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 			cubeA_gen_range = torch.tensor(self.cubeA_gen_range)
 			cubeA_init_pos = torch.tensor(self.cubeA_init_pos)
 			xy = torch.rand((b, 2)) * cubeA_gen_range + (cubeA_init_pos - cubeA_gen_range/2)
-			cubeA_xy = xy
+			cubeA_xy = xy.clone()
 
 			xyz[:, :2] = cubeA_xy
 			xyz[:, 2] = self.cubeA_half_sizes[:, 2]
 			self.cubeA.set_pose(Pose.create_from_pq(p=xyz.clone()))
+
+			if self.include_cubeB:
+				cubeB_xy = xy.clone()
+				cubeB_gen_range = torch.tensor(self.cubeB_gen_range)
+				cubeB_offset = torch.tensor(self.cubeB_offset)
+				cubeB_xy[:, :2] += torch.rand((b, 2)) * cubeB_gen_range + (cubeB_offset - cubeB_gen_range/2)
+				xyz[:, :2] = cubeB_xy
+				xyz[:, 2] = self.cubeB_half_sizes[:, 2]
+				self.cubeB.set_pose(Pose.create_from_pq(p=xyz))
 
 			# set the keyframe for the robot
 			self.agent.robot.set_qpos(self.agent.keyframes["rest"].qpos)
@@ -144,19 +204,21 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 		return self.agent.robot.joints_map["left_outer_knuckle_joint"].qpos
 
 	def _get_obs_extra(self, info: dict):
+		# these obs are common to push, pick, and stack
 		obs = dict(
 			tcp_pose=self.agent.tcp.pose.p,
 			gripper_state=torch.clamp(self.get_gripper_state()/0.8178, min=0.0, max=1.0),  # normalize gripper state to [0, 1]
 			is_cubeA_grasped=info["is_cubeA_grasped"],
+			goal_pos=torch.zeros((self.num_envs, 3), device=self.device),	# placeholder, to be filled in by subclasses if needed
+			cubeA_pose=self.cubeA.pose.raw_pose,
+			tcp_to_cubeA_pos=self.cubeA.pose.p - self.agent.tcp.pose.p,
 		)
-		if "state" in self.obs_mode:
+		# these obs are only relevant if cubeB is part of the environment
+		if self.include_cubeB:
 			obs.update(
-				goal_pos=torch.zeros((self.num_envs, 3), device=self.device),
-				cubeA_pose=self.cubeA.pose.raw_pose,
-				cubeB_pose=torch.zeros_like(self.cubeA.pose.raw_pose),
-				tcp_to_cubeA_pos=self.cubeA.pose.p - self.agent.tcp.pose.p,
-				tcp_to_cubeB_pos=torch.zeros_like(self.cubeA.pose.p),
-				cubeA_to_cubeB_pos=torch.zeros_like(self.cubeA.pose.p),
+				cubeB_pose=self.cubeB.pose.raw_pose,
+				tcp_to_cubeB_pos=self.cubeB.pose.p - self.agent.tcp.pose.p,
+				cubeA_to_cubeB_pos=self.cubeB.pose.p - self.cubeA.pose.p,
 			)
 		return obs
 
