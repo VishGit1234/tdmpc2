@@ -13,11 +13,6 @@ from mani_skill.utils.structs.actor import Actor
 @register_env("KinovaStackCube", max_episode_steps=15)
 class KinovaStackCubeEnv(KinovaBaseEnv):
 	def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
-		self.cubeB_offset = kwargs["cubeB_offset"]
-		self.cubeB_gen_range = kwargs["cubeB_gen_range"]
-
-		del kwargs["cubeB_offset"]
-		del kwargs["cubeB_gen_range"]
 		kwargs["include_cubeB"] = True # Ensure cubeB is included in the environment
 		super().__init__(*args, robot_uids=robot_uids, **kwargs)
 

@@ -12,8 +12,8 @@ class KinovaMultitaskEnv(gym.Wrapper):
 			("kinova_stack_cube", self.stack_cube_env)
 		]
 		super().__init__(self.push_cube_env)
-		assert self.push_cube_env.observation_space == self.pick_cube_env.observation_space == self.stack_cube_env.observation_space, "Observation spaces must be equal"
-		assert self.push_cube_env.action_space == self.pick_cube_env.action_space == self.stack_cube_env.action_space, "Action spaces must be equal"
+		assert self.push_cube_env.observation_space.shape == self.pick_cube_env.observation_space.shape == self.stack_cube_env.observation_space.shape, "Observation spaces must be equal"
+		assert self.push_cube_env.action_space.shape == self.pick_cube_env.action_space.shape == self.stack_cube_env.action_space.shape, "Action spaces must be equal"
 
 		self.observation_space = self.push_cube_env.observation_space
 		self.action_space = self.push_cube_env.action_space

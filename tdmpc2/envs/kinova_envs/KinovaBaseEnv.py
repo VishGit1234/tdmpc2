@@ -23,6 +23,8 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 	def __init__(self, *args, robot_uids="kinova_gen3", **kwargs):
 		self.cubeA_init_pos = kwargs["cubeA_init_pos"]
 		self.cubeA_gen_range = kwargs["cubeA_gen_range"]
+		self.cubeB_offset = kwargs["cubeB_offset"]
+		self.cubeB_gen_range = kwargs["cubeB_gen_range"]
 
 		self.cube_rand_ranges = kwargs["cube_randomization_ranges"]
 		self.cube_size_range = self.cube_rand_ranges["size"]
@@ -38,6 +40,8 @@ class KinovaBaseEnv(StackCubeEnv, ABC):
 		del kwargs["cubeA_init_pos"]
 		del kwargs["cubeA_gen_range"]
 		del kwargs["cube_randomization_ranges"]
+		del kwargs["cubeB_offset"]
+		del kwargs["cubeB_gen_range"]
 		kwargs.pop("control_freq", None)
 		kwargs.pop("include_cubeB", None)
 		super().__init__(*args, robot_uids=robot_uids, sim_config=sim_config, **kwargs)

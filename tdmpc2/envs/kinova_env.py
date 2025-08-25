@@ -18,6 +18,9 @@ def make_env(cfg):
     # Initial positions and generation ranges for cubeA
     "cubeA_init_pos": cfg.cubeA_init_pos,
     "cubeA_gen_range": cfg.cubeA_gen_range,
+    # Initial positions and generation ranges for cubeB
+    "cubeB_offset": cfg.cubeB_offset,
+    "cubeB_gen_range": cfg.cubeB_gen_range,
     # Cube randomization ranges
     "cube_randomization_ranges": cfg.cube_randomization_ranges
   }
@@ -48,7 +51,7 @@ def make_env(cfg):
       kwargs = dict(general_kwargs, target_offset=cfg.pick_target_offset, goal_radius=cfg.pick_goal_radius)
     elif cfg.task == 'kinova_stack_cube':
       task_name = "KinovaStackCube"
-      kwargs = dict(general_kwargs, cubeB_offset=cfg.cubeB_offset, cubeB_gen_range=cfg.cubeB_gen_range)
+      kwargs = dict(general_kwargs)
     env = gym.make(task_name, num_envs = cfg.num_envs, **kwargs)
     eval_env = gym.make(task_name, num_envs = cfg.num_eval_envs, **kwargs)
 

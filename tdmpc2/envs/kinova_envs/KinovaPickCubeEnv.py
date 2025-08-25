@@ -63,7 +63,7 @@ class KinovaPickCubeEnv(KinovaBaseEnv):
 			
 	def _get_obs_extra(self, info: dict):
 		obs = super()._get_obs_extra(info)
-		obs["goal_pose"] = info["goal_pos"]
+		obs["goal_pos"] = info["goal_pos"]
 		return obs
 
 	def evaluate(self):
