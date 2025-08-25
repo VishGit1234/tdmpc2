@@ -153,8 +153,9 @@ class TDMPC2(torch.nn.Module):
 			for t in range(self.cfg.horizon):
 				# Expand action for batched rollouts
 				action = actions.select(-3, t).unsqueeze(0).expand(num_rollouts, -1, -1, -1)
-				reward = math.two_hot_inv(self.model.reward(z_rollout, action, task), self.cfg)
-				z_rollout = self.model.next(z_rollout, action, task)
+				z_rollout_next = self.model.next(z_rollout, action, task)
+				reward = math.two_hot_inv(self.model.reward(z_rollout, z_rollout_next, task), self.cfg)
+				z_rollout = z_rollout_next
 				G += discount * reward
 				discount_update = self.discount
 				discount *= discount_update
@@ -321,7 +322,10 @@ class TDMPC2(torch.nn.Module):
 		# Predictions
 		_zs = zs[:-1]
 		qs = self.model.Q(_zs, action, task, return_type='all')
-		reward_preds = self.model.reward(_zs, action, task)
+		if self.cfg.use_stochastic_dynamics:
+			reward_preds = self.model.reward(_zs, zs[1:], task)
+		else:
+			reward_preds = self.model.reward(_zs, action, task)
 		if self.cfg.episodic:
 			termination_pred = self.model.termination(zs[1:], task, unnormalized=True)
 

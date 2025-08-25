@@ -22,10 +22,13 @@ class WorldModel(nn.Module):
 			self._task_emb = nn.Embedding(len(cfg.tasks), cfg.task_dim, max_norm=1)
 		self._encoder = layers.enc(cfg)
 		if cfg.use_stochastic_dynamics:
+			# Stochastic dynamics model outputs mean and std of next state distribution
 			self._dynamics = layers.mlp(cfg.latent_dim + cfg.action_dim, 2*[cfg.mlp_dim], 2*cfg.latent_dim, act=layers.SimNorm(cfg))
+			# Also modifies reward function to take in both current and next latent state (instead of action)
+			self._reward = layers.mlp(cfg.latent_dim + cfg.latent_dim + cfg.task_dim, 2*[cfg.mlp_dim], max(cfg.num_bins, 1))
 		else:
 			self._dynamics = layers.mlp(cfg.latent_dim + cfg.action_dim, 2*[cfg.mlp_dim], cfg.latent_dim, act=layers.SimNorm(cfg))
-		self._reward = layers.mlp(cfg.latent_dim + cfg.action_dim + cfg.task_dim, 2*[cfg.mlp_dim], max(cfg.num_bins, 1))
+			self._reward = layers.mlp(cfg.latent_dim + cfg.action_dim + cfg.task_dim, 2*[cfg.mlp_dim], max(cfg.num_bins, 1))
 		self._termination = layers.mlp(cfg.latent_dim + cfg.task_dim, 2*[cfg.mlp_dim], 1) if cfg.episodic else None
 		self._pi = layers.mlp(cfg.latent_dim + cfg.task_dim, 2*[cfg.mlp_dim], 2*cfg.action_dim)
 		self._Qs = layers.Ensemble([layers.mlp(cfg.latent_dim + cfg.action_dim + cfg.task_dim, 2*[cfg.mlp_dim], max(cfg.num_bins, 1), dropout=cfg.dropout) for _ in range(cfg.num_q)])
@@ -130,8 +133,17 @@ class WorldModel(nn.Module):
 		else:
 			z_next = self._dynamics(z)
 			return z_next
-
-	def reward(self, z, a, task):
+		
+	def _reward_obs(self, z, z_next, task):
+		"""
+		Predicts instantaneous (single-step) reward.
+		"""
+		if self.cfg.multitask:
+			z = self.task_emb(z, task)
+		z = torch.cat([z, z_next], dim=-1)
+		return self._reward(z)
+	
+	def _reward_action(self, z, a, task):
 		"""
 		Predicts instantaneous (single-step) reward.
 		"""
@@ -139,7 +151,16 @@ class WorldModel(nn.Module):
 			z = self.task_emb(z, task)
 		z = torch.cat([z, a], dim=-1)
 		return self._reward(z)
-	
+
+	def reward(self, z, tensor, task):
+		"""
+		Predicts instantaneous (single-step) reward.
+		"""
+		if self.cfg.use_stochastic_dynamics:
+			return self._reward_obs(z, tensor, task)
+		else:
+			return self._reward_action(z, tensor, task)
+
 	def termination(self, z, task, unnormalized=False):
 		"""
 		Predicts termination signal.
