@@ -2,7 +2,7 @@ defaults:
     - override hydra/launcher: submitit_local
 
 # environment
-task: kinova_stack_cube
+task: kinova_pick_cube
 obs: state
 episodic: false
 num_envs: 1024
@@ -20,7 +20,7 @@ episode_length: 15 # number of control steps
 action_scale: 0.05
 gripper_scale: 0.4
 # max_repeats: 20
-noise_std: 0.01
+noise_std: 0.05
 # action_noise: 0.1
 control_freq: 2 # Hz
 cube_randomization_ranges:
@@ -81,13 +81,13 @@ vmin: -10
 vmax: +10
 
 # architecture
-use_stochastic_dynamics: false
+use_stochastic_dynamics: true
 model_size: ??? # preset config, below ignored
 num_enc_layers: 2
-enc_dim: 24
+enc_dim: 16
 num_channels: 32
 mlp_dim: 96
-latent_dim: 16
+latent_dim: 8
 task_dim: 8
 num_q: 2
 dropout: 0.01
